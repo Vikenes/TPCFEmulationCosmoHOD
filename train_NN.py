@@ -92,7 +92,7 @@ if train_config.stochastic_weight_avg:
         )
     
     
-logger_name = f"ExpLR_test2"
+logger_name = f"test"
 logger_ = TensorBoardLogger(
     save_dir = train_config.default_root_dir, 
     name     = logger_name,
