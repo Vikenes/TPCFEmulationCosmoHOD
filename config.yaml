@@ -1,0 +1,32 @@
+data:
+    feature_columns: ['sigma_logM', 'alpha', 'kappa', 'log10M1', 'log10Mmin', 'log10r']
+    label_columns: ['log10xi',]
+    batch_size: 256
+    num_workers: 10
+    shuffle: true
+    train_data_path: "./tpcf_data/TPCF_train.csv"
+    val_data_path: "./tpcf_data/TPCF_val.csv"
+    test_data_path: "./tpcf_data/TPCF_test.csv"
+    feature_scaler: 'StandardScaler'
+    label_scaler: 'StandardScaler'
+
+model:
+    hidden_dims: [512]
+    activation: 'gelu'
+    loss: 'L1Loss'
+    dropout: 0.0
+    learning_rate: 1.e-2
+    weight_decay: 1.e-5
+    zero_bias: false
+    batch_norm: false
+    type: FullyConnected
+
+training:
+    gpus: [0]
+    max_epochs: 1500
+    patience: 100
+    stochastic_weight_avg: false
+    swa_start: 50
+    gamma: 0.97
+    gradient_clip_val: 0.0
+    default_root_dir: "./emulators/"
