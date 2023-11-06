@@ -1,12 +1,13 @@
 data:
-    feature_columns: ['sigma_logM', 'alpha', 'kappa', 'log10M1', 'log10Mmin', 'r']
-    label_columns: ['xi',]
+    feature_columns: ['wb', 'wc', 'sigma8', 'ns', 'alpha_s', 'N_eff', 'w0', 'wa',
+                        'sigma_logM', 'alpha', 'kappa', 'log10M1', 'log10Mmin', 'r']
+    label_columns: ['xi_over_xi_fiducial',]
     batch_size: 256
     num_workers: 10
     shuffle: true
-    train_data_path: "./tpcf_data/TPCF_train.csv"
-    val_data_path: "./tpcf_data/TPCF_val.csv"
-    test_data_path: "./tpcf_data/TPCF_test.csv"
+    train_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_train_ng_fixed.csv"
+    val_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_val_ng_fixed.csv"
+    test_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_test_ng_fixed.csv"
     feature_scaler: 'StandardScaler'
     label_scaler: 'StandardScaler'
 
@@ -24,5 +25,5 @@ training:
     gpus: [0]
     max_epochs: 1500
     stochastic_weight_avg: true
-    default_root_dir: "./emulators/"
+    default_root_dir: "./emulators/xi_over_xi_fiducial"
 
