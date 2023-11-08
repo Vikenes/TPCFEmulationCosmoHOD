@@ -18,12 +18,14 @@ model:
     dropout: 0.
     learning_rate: 1.e-2
     weight_decay: 5.e-6
+    zero_bias: true
     batch_norm: false
     type: FullyConnected
 
 training:
     gpus: [0]
     max_epochs: 1500
-    stochastic_weight_avg: true
+    use_swa: false
+    gamma: 0.97
     default_root_dir: "./emulators/xi_over_xi_fiducial"
 

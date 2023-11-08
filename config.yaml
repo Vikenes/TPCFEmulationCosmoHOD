@@ -1,33 +1,33 @@
 data:
     feature_columns: ['wb', 'wc', 'sigma8', 'ns', 'alpha_s', 'N_eff', 'w0', 'wa',
                         'sigma_logM', 'alpha', 'kappa', 'log10M1', 'log10Mmin', 'r']
-    label_columns: ['xi_over_xi_fiducial',]
-    batch_size: 256
-    num_workers: 10
-    shuffle: true
+    label_columns:   ['xi_over_xi_fiducial',]
+    batch_size:      256
+    num_workers:     10
+    shuffle:         true
     train_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_train_ng_fixed.csv"
-    val_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_val_ng_fixed.csv"
-    test_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_test_ng_fixed.csv"
-    feature_scaler: 'StandardScaler'
-    label_scaler: 'StandardScaler'
+    val_data_path:   "./tpcf_data/xi_over_xi_fiducial/TPCF_val_ng_fixed.csv"
+    test_data_path : "./tpcf_data/xi_over_xi_fiducial/TPCF_test_ng_fixed.csv"
+    feature_scaler:  "StandardScaler"
+    label_scaler:    "StandardScaler"
 
 model:
-    hidden_dims: [128]
-    activation: 'gelu'
-    loss: 'L1Loss'
-    dropout: 0.0
-    learning_rate: 1.e-2
-    weight_decay: 1.e-5
-    zero_bias: false
-    batch_norm: false
-    type: FullyConnected
+    hidden_dims:    [128]
+    activation:     "gelu"
+    loss:           "L1Loss"
+    dropout:        0.0
+    learning_rate:  1.e-2
+    weight_decay:   5.e-6
+    zero_bias:      true 
+    batch_norm:     false
+    type:           FullyConnected
  
 training:
-    gpus: [0]
-    max_epochs: 100
-    patience: 100
-    stochastic_weight_avg: false
-    swa_start: 50
-    gamma: 0.97
-    gradient_clip_val: 0.0
-    default_root_dir: "./emulators/xi_over_xi_fiducial"
+    gpus:               [0]
+    max_epochs:         100
+    patience:           30
+    use_swa:            false
+    swa_start:          50
+    gamma:              0.97
+    gradient_clip_val:  0.0
+    default_root_dir:   "./tpcf_data/xi_over_xi_fiducial/emulators"
