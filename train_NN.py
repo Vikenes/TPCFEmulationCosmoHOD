@@ -56,8 +56,6 @@ data_module.setup(
     test_data_path  = Path(data_config.test_data_path),
     autoencoder     = model_config.autoencoder,
 )
-
-
 model = getattr(_models, model_config.type)(
     n_features=data_module.train_data.x.shape[-1],
     output_dim=data_module.train_data.y.shape[-1],
@@ -130,6 +128,6 @@ trainer.fit(model=model, datamodule=data_module)
 dur = time.time() - t0
 print(f"Model: {trainer.logger.log_dir} took {dur//60:.0f}min {dur%60:.2f}sec to train")
 
-with open(scalers_path.parent / "training_duration.txt", "w") as f:
+with open(scalers_path.parent / "training_duration.txt", "a") as f:
     f.write(f"{scalers_path.name}: {dur//60:.0f} min {dur%60:.1f} sec\n")
 # trainer.test(model=model, datamodule=data_module)
