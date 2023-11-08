@@ -22,7 +22,6 @@ from _nn_config import DataConfig, ModelConfig, TrainingConfig
 import _models
 
 
-
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # load configuration file
@@ -65,7 +64,6 @@ model = getattr(_models, model_config.type)(
     **dict(model_config),
     )
 
-
 # Change weight init
 def init_weights_small_variance(m,):
     if type(m) == nn.Linear:
@@ -83,7 +81,7 @@ callbacks.append(EarlyStopping(
     verbose  = False,
     ))
 
-if train_config.stochastic_weight_avg:
+if train_config.use_swa:
     callbacks.append(
         StochasticWeightAveraging(
             swa_lrs         = model_config.learning_rate,
@@ -92,7 +90,7 @@ if train_config.stochastic_weight_avg:
         )
     
     
-logger_name = f"test"
+logger_name = f"time_test"
 logger_ = TensorBoardLogger(
     save_dir = train_config.default_root_dir, 
     name     = logger_name,
@@ -129,9 +127,9 @@ t0 = time.time()
 trainer.fit(model=model, datamodule=data_module)
 
     
-duration = time.time() - t0
-print(f"Model: {trainer.logger.log_dir} took {duration:.2f} seconds to train")
+dur = time.time() - t0
+print(f"Model: {trainer.logger.log_dir} took {dur//60:.0f}min {dur%60:.2f}sec to train")
 
-# with open(scalers_path / "training_duration.txt", "w") as f:
-#     f.write(f"{duration:.3f} # seconds\n")
+with open(scalers_path.parent / "training_duration.txt", "w") as f:
+    f.write(f"{scalers_path.name}: {dur//60:.0f} min {dur%60:.1f} sec\n")
 # trainer.test(model=model, datamodule=data_module)
