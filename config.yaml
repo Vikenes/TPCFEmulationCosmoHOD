@@ -2,8 +2,8 @@ data:
     feature_columns: ['wb', 'wc', 'sigma8', 'ns', 'alpha_s', 'N_eff', 'w0', 'wa',
                         'sigma_logM', 'alpha', 'kappa', 'log10M1', 'log10Mmin', 'r']
     label_columns:   ['xi_over_xi_fiducial',]
-    batch_size:      256
-    num_workers:     10
+    batch_size:      1240
+    num_workers:     32
     shuffle:         true
     train_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_train_ng_fixed.csv"
     val_data_path:   "./tpcf_data/xi_over_xi_fiducial/TPCF_val_ng_fixed.csv"
@@ -12,7 +12,7 @@ data:
     label_scaler:    "StandardScaler"
 
 model:
-    hidden_dims:    [128]
+    hidden_dims:    [1024,1024]
     activation:     "gelu"
     loss:           "L1Loss"
     dropout:        0.0
@@ -24,10 +24,11 @@ model:
  
 training:
     gpus:               [0]
-    max_epochs:         100
-    patience:           30
+    max_epochs:         500
+    patience:           100
     use_swa:            false
     swa_start:          50
     gamma:              0.97
     gradient_clip_val:  0.0
     default_root_dir:   "./tpcf_data/xi_over_xi_fiducial/emulators"
+    log_save_dir:       "hidden_dims_test"

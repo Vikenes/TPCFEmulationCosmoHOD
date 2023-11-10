@@ -88,10 +88,15 @@ if train_config.use_swa:
         )
     
     
-logger_name = f"time_test"
-logger_ = TensorBoardLogger(
-    save_dir = train_config.default_root_dir, 
-    name     = logger_name,
+# logger_name = f"time_test"
+if train_config.log_save_dir is not None:
+    logger_ = TensorBoardLogger(
+        save_dir = train_config.default_root_dir, 
+        name     = train_config.log_save_dir,
+        )
+else:
+    logger_ = TensorBoardLogger(
+        save_dir = train_config.default_root_dir,
     )
 
 
