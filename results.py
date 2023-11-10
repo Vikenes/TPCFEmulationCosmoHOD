@@ -88,7 +88,6 @@ class emulator_test:
         self.print_config_param     = [print_config_param] if type(print_config_param) != list and print_config_param is not None else print_config_param
 
 
-
     def print_config(self, version):
         """
         Prints the config parameter values for an emulator version
@@ -173,138 +172,19 @@ class emulator_test:
             dur_vv_list.append(dur_vv)
             print(f" - {dur_vv=:.2f} s")
 
-            print(f"ALL VERSION {vv}  - {dur_vv=:.2f} s:")
-            print(f"TOTAL:")
-            print(f" - {err_mean=:.4f}")
-            print(f" - {err_median=:.4f}")
-            print(f" - {err_stddev=:.4f}")
-            print("PARAMS:")
-            self.print_config(version=vv)
-
-            # print(f"COSMO:")
-            # err_mean_cosmo    = np.mean(np.mean(_err_lst_version, axis=(1,2)))
-            # err_median_cosmo  = np.mean(np.median(_err_lst_version, axis=(1,2)))
-            # err_stddev_cosmo  = np.mean(np.std(_err_lst_version, axis=(1,2)))
-            # err_median_cosmo  = np.mean(np.median(_err_lst_version, axis=0))
-            # err_stddev_cosmo  = np.mean(np.std(_err_lst_version, axis=0))
-            # print(f" - {err_mean_cosmo=}")
-            # print(f" - {err_median_cosmo=}")
-            # print(f" - {err_stddev_cosmo=}")
-
-
-
-
-            print()
-            print("=====================================")
-            print()
-            
-
-        dur_tot = time.time() - t0_tot
-        dur_vv_avg = np.mean(dur_vv_list)
-        print(f"TOTAL TIME: {dur_tot=:.2f} s")
-        print(f"Average time per version: {dur_vv_avg=:.2f} s")
-
-    
-      
-
-    def plot_tpcf(
-            self, 
-            plot_versions:          Union[List[int], range, str] = "all",
-            max_r_error:            float = 60.0,
-            nodes_per_simulation:   int = 1,
-            # plot_every_n:           int = 1,
-            ):
-        flag = self.flag 
-        np.random.seed(1998)
-        
-        fff_common   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        xi_fiducial  = fff_common["xi_fiducial"][...]
-        r_common     = fff_common["r"][...]
-        r_error_mask = r_common < max_r_error
-        r_len        = len(r_common)
-        r_error_len  = len(r_common[r_error_mask])
-        fff_common.close()
-        if type(plot_versions) == list or type(plot_versions) == range:
-            version_list = plot_versions
-        else:
-            version_list = range(self.N_versions)
-
-        t0_tot = time.time()
-        dur_vv_list = []
-
-        for vv in version_list:
-            t0_vv = time.time()
-
-            fig = plt.figure(figsize=(10, 9))
-            gs = gridspec.GridSpec(2, 1, hspace=0, height_ratios=[1.5, 1])
-            plt.rc('axes', prop_cycle=custom_cycler)
-            ax0 = plt.subplot(gs[0])
-            ax1 = plt.subplot(gs[1])
-            ax0.set_prop_cycle(custom_cycler)
-
-            fff = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-            for iii, simulation_key in enumerate(fff.keys()):
-                if not simulation_key.startswith("AbacusSummit"):
-                    # Skip the xi_fiducial and r keys
-                    continue
-                
-                fff_cosmo = fff[simulation_key]
-                nodes_idx = np.random.randint(0, len(fff_cosmo.keys()), nodes_per_simulation)
-
-                # print(nodes)
-                # exit()
-
-                for jj in nodes_idx:
-                    fff_cosmo_HOD = fff_cosmo[f"node_{jj}"]
-
-                    xi_data = fff_cosmo_HOD[self.xi_key][...]
-
-
-                    params_batch   = np.column_stack(
-                        (np.vstack(
-                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
-                            , r_common
-                            ))
-                    
-                    _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
-                    # Get linear r and xi if log10r and log10xi are True 
-                    # xi_emul = xi_emul_ #* xi_fiducial
-                    # xi_data = xi_data_ #* xi_fiducial
-
-                    rel_err         = np.abs(xi_emul / xi_data - 1)[r_error_mask]
-
-                    ax0.plot(r_common, xi_data, linewidth=0, marker='o', markersize=2, alpha=0.5)
-                    ax0.plot(r_common, xi_emul, linewidth=1, alpha=1)
-                    ax1.plot(r_common[r_error_mask], rel_err, color="gray", linewidth=0.7, alpha=0.5)
-
-
-            fff.close()
-            
-            # exit()
-            dur_vv = time.time() - t0_vv
-            dur_vv_list.append(dur_vv)
-            print(f" - {dur_vv=:.2f} s")
-            print()
-            print("=====================================")
-            print()
-            exit()
-            continue 
-
-            for i in range(1, 4):
-                ax1.plot(r_common,
-                    np.ones_like(r_common) * 10**(-i),
-                    linewidth=0.8,
-                    linestyle="--",
-                    color='gray',
-                    zorder=100,
-                )
-
+            #### FIX SAVEERRORS
             if not SAVEERRORS:
                 """ 
                 Display errors and relevant config parameters for each version
                 """
-                print(f'VERSION {vv}:')
+                # print(f'VERSION {vv}:')
+                print(f"ALL VERSION {vv}  - {dur_vv=:.2f} s:")
+                print(f"TOTAL:")
+                print(f" - {err_mean=:.4f}")
+                print(f" - {err_median=:.4f}")
+                print(f" - {err_stddev=:.4f}")
+                print("PARAMS:")
+                self.print_config(version=vv)
                 self.print_config(version=vv)
                 # print(f"zero_bias={vv_model_config.zero_bias}, patience={vv_training_config.patience}")
                 print(f'mean error={err_mean:.4f}, median_error={err_median:.4f}, error_stddev={err_stddev:.4f}\n')
@@ -335,16 +215,125 @@ class emulator_test:
                 continue
 
 
+
+
+            print()
+            print("=====================================")
+            print()
             
+
+        dur_tot = time.time() - t0_tot
+        dur_vv_avg = np.mean(dur_vv_list)
+        print(f"TOTAL TIME: {dur_tot=:.2f} s")
+        print(f"Average time per version: {dur_vv_avg=:.2f} s")
+
+
+
+    
+      
+
+    def plot_tpcf(
+            self, 
+            plot_versions:          Union[List[int], range, str] = "all",
+            max_r_error:            float = 60.0,
+            nodes_per_simulation:   int = 1,
+            masked_r:               bool = False,
+            xi_ratio:               bool = True,
+            # plot_every_n:           int = 1,
+            ):
+        flag = self.flag 
+        np.random.seed(42)
+        
+        fff_common   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        xi_fiducial_ = fff_common["xi_fiducial"][...]
+        r_common_    = fff_common["r"][...]
+        fff_common.close()
+
+        if masked_r:
+            r_mask  = r_common_ < max_r_error
+        else:
+            r_mask  = np.ones_like(r_common_, dtype=bool)
+
+        r_common    = r_common_[r_mask]
+        xi_fiducial = xi_fiducial_[r_mask]
+        r_len       = len(r_common)
+
+
+        if type(plot_versions) == list or type(plot_versions) == range:
+            version_list = plot_versions
+        else:
+            version_list = range(self.N_versions)
+
+        for vv in version_list:
+            print(f"Plotting version {vv}")
+            fig = plt.figure(figsize=(10, 9))
+            gs = gridspec.GridSpec(2, 1, hspace=0, height_ratios=[1.5, 1])
+            plt.rc('axes', prop_cycle=custom_cycler)
+            ax0 = plt.subplot(gs[0])
+            ax1 = plt.subplot(gs[1])
+            ax0.set_prop_cycle(custom_cycler)
+
+            fff = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+            N_simulations = len(fff.keys())
+            for iii, simulation_key in enumerate(fff.keys()):
+                if not simulation_key.startswith("AbacusSummit"):
+                    # Skip the xi_fiducial and r keys
+                    N_simulations -= 1
+                    continue
+                
+                fff_cosmo = fff[simulation_key]
+                nodes_idx = np.random.randint(0, len(fff_cosmo.keys()), nodes_per_simulation)
+
+
+                for jj in nodes_idx:
+                    fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
+
+                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask]
+
+                    params_batch   = np.column_stack(
+                        (np.vstack(
+                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
+                            , r_common
+                            ))
+
+                    _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
+
+                    rel_err         = np.abs(xi_emul / xi_data - 1)
+
+                    if not xi_ratio:
+                        xi_data = xi_data * xi_fiducial
+                        xi_emul = xi_emul * xi_fiducial
+
+                    ax0.plot(r_common, xi_data, linewidth=0, marker='o', markersize=1, alpha=1)
+                    ax0.plot(r_common, xi_emul, linewidth=1, alpha=1)
+                    ax1.plot(r_common, rel_err, color="gray", linewidth=0.7, alpha=0.5)
+
+
+            fff.close()
+            
+            for i in range(1, 4):
+                ax1.plot(r_common,
+                    np.ones_like(r_common) * 10**(-i),
+                    linewidth=0.8,
+                    linestyle="--",
+                    color='gray',
+                    zorder=100,
+                )
 
             # ax0.set_xlim([-3, 0.1])
             # ax1.set_xlim([-3, 0.1])
             ax0.set_ylim([1e-2, 1e4])
             ax1.set_ylim([1e-4, 1e0])
 
+            if xi_ratio:
+                ylabel =  r"$\xi_{gg}(r)/\xi_{gg}(r, \mathcal{C}_\mathrm{fid}, \mathcal{G}_\mathrm{fid})$"
+            else:
+                ylabel =  r"$\xi_{gg}(r)$"
+
             ax1.set_xlabel(r'$\displaystyle  r/h \: [\mathrm{Mpc}]$',fontsize=18)
             ax1.set_ylabel(r'$\displaystyle \mathrm{rel. diff.}$',fontsize=20)
-            ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
+            ax0.set_ylabel(ylabel,fontsize=22)
 
             ax0.xaxis.set_ticklabels([])
             ax0.set_xscale("log")
@@ -352,36 +341,47 @@ class emulator_test:
             ax1.set_yscale("log")
             ax1.set_xscale("log")
 
-            ax0.set_title(f"version {vv}")
+            ax0.set_title(rf"version {vv}. {N_simulations} different sets of $\displaystyle \mathcal{{C}}$")
 
             ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
             ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
             ax0.legend(loc="upper right", fontsize=12)
 
             if not SAVEFIG:
+                if masked_r:
+                    ax0.plot(r_common_, np.ones_like(r_common_), lw=0)
                 plt.show()
                 # continue
+                exit()
             
             else:
             
-                figdir = f'./plots/'
+                # figdir = f'./plots/{self.emul_dir}'
+                
 
                 if PRESENTATION:
-                    savedir = "presentation"
+                    fig_dir_list = list(self.fig_dir.parts)
+                    fig_dir_list.insert(1, "presentation")
+                    figdir = Path("").joinpath(*fig_dir_list)
                 else:
-                    savedir = self.emul_dir
+                    figdir = self.fig_dir
             
-                figdir = Path(f"{figdir}/{savedir}")
                 figdir.mkdir(parents=True, exist_ok=True)
                 
-                figtitle = f'version{vv}.png' 
-
+                figtitle = f'version{vv}'
+                if xi_ratio:
+                    figtitle += "_xi_ratio"
+                else:
+                    figtitle += "_xi"
+                if masked_r:
+                    figtitle += "_masked_r"
                 if PRESENTATION:
                     week_number = datetime.now().strftime("%U")
-                    figname = f"{figdir}/week{int(week_number)}_{self.emul_dir}_{figtitle}"
-                else:
-                    figname = f'{figdir}/{figtitle}'
+                    figtitle = f"week{int(week_number)}_{figtitle}"
 
+                figtitle += ".png"
+                figname = Path(figdir / figtitle)
+                
 
                 plt.savefig(
                     figname,
@@ -397,10 +397,6 @@ class emulator_test:
                     os.system('git push')
 
 
-        dur_tot = time.time() - t0_tot
-        dur_vv_avg = np.mean(dur_vv_list)
-        print(f"TOTAL TIME: {dur_tot=:.2f} s")
-        print(f"Average time per version: {dur_vv_avg=:.2f} s")
 
 param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
 test = emulator_test(
@@ -421,5 +417,9 @@ dropout_test = emulator_test(
 
 # test.plot_tpcf(range(0,3))
 # test.save_tpcf_errors()
-test.plot_tpcf(plot_versions=[5,6,7], nodes_per_simulation=4)
+SAVEFIG = True
+PRESENTATION = True
+test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=False, xi_ratio=True)
+test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=True, xi_ratio=False)
+
 # dropout_test.save_tpcf_errors()
