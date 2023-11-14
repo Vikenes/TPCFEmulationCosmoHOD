@@ -113,13 +113,18 @@ class emulator_test:
             self, 
             plot_versions:          Union[List[int], range, str] = "all",
             max_r_error:            float = 60.0,
+            r_error_mask:           bool = True,
             ):
         
         flag = self.flag 
         
         fff_common   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         r_common     = fff_common["r"][...]
-        r_error_mask = r_common < max_r_error
+        if r_error_mask:
+            r_error_mask = r_common < max_r_error
+        else:
+            r_error_mask = np.ones_like(r_common, dtype=bool)
+        r_common     = r_common[r_error_mask]
         r_len        = len(r_common)
         fff_common.close()
 
@@ -134,36 +139,44 @@ class emulator_test:
         for vv in version_list:
             t0_vv = time.time()
 
-            _err_lst_version = []    
+            _err_lst_version = []
+            _sim_lst_version = []
             fff = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-            for iii, simulation_key in enumerate(fff.keys()):
+            for simulation_key in fff.keys():
                 if not simulation_key.startswith("AbacusSummit"):
                     # Skip the xi_fiducial and r keys
                     continue
-                
+                s_ = simulation_key.split("_")
+                _sim_lst_version.append(f"{s_[2]}_{s_[3]}")
                 fff_cosmo = fff[simulation_key]
                 _err_lst_cosmo = []
-                for jj, params in enumerate(fff_cosmo.keys()):
-                    fff_cosmo_HOD = fff_cosmo[params]
+                for params in fff_cosmo.keys():
 
-                    xi_data = fff_cosmo_HOD[self.xi_key][...]
+                    fff_cosmo_HOD = fff_cosmo[params]
 
                     params_batch   = np.column_stack(
                         (np.vstack(
                             [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
                             , r_common
                             ))
+                    _emulator       = cm_emulator_class(version=vv, LIGHTING_LOGS_PATH=self.emul_dir)
                     
-                    _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_error_mask]
                     xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
 
-                    rel_err         = np.abs(xi_emul / xi_data - 1)[r_error_mask]
+                    rel_err         = np.abs(xi_emul / xi_data - 1)
                     _err_lst_cosmo.append(rel_err)
+                    
 
                 _err_lst_version.append(_err_lst_cosmo)
             
             fff.close()
-            # err_all = np.array(_err_lst_version)
+
+            err_all     = np.array(_err_lst_version)
+            err_mean_cosmo   = np.mean(err_all, axis=(1,2))
+            err_median_cosmo = np.median(err_all, axis=(1,2))
+            err_stddev_cosmo = np.std(err_all, axis=(1,2))
+
             err_mean    = np.mean(_err_lst_version)
             err_median  = np.median(_err_lst_version)
             err_stddev  = np.std(_err_lst_version)
@@ -185,41 +198,46 @@ class emulator_test:
                 print(f" - {err_stddev=:.4f}")
                 print("PARAMS:")
                 self.print_config(version=vv)
-                self.print_config(version=vv)
-                # print(f"zero_bias={vv_model_config.zero_bias}, patience={vv_training_config.patience}")
-                print(f'mean error={err_mean:.4f}, median_error={err_median:.4f}, error_stddev={err_stddev:.4f}\n')
+                print()
+                print(f"MEAN COSMOLOGY:")
+                print("Simulation | MeanError | MedianError | ErrorStdDev")
+                for i in range(len(err_mean_cosmo)):
+                    print(f"{_sim_lst_version[i]:10}", end=" | ")
+                    print(f"{err_mean_cosmo[i]:9.4f}", end=" | ")
+                    print(f"{err_median_cosmo[i]:11.4f}", end=" | ")
+                    print(f"{err_stddev_cosmo[i]:11.4f}")
+
+                print()
+                print("=====================================")
+                print()
 
             else:
                 """
                 Save errors to file
                 """
                 print(f'Saving errors for version {vv}')
-                file = f'{self.logs_path}/errors.txt'
-                if not os.path.isfile(file):
-                    print(f'creating file: {file}')
-                    with open(file, 'w') as f:
-                        f.write(f'# VERSION, MeanError, MedianError, ErrorStdDev, ConfigParam: \n')
-                        f.close()
-            
-                with open(file, 'a') as f:
-                    f.write(f'{vv:7d}, ')
-                    f.write(f'{err_mean:10.4f}, {err_median:10.4f}, {err_stddev:10.4f}')
-                    if self.print_config_param is not None:
-                        # Write relevant config parameters to file
-                        config_output = self.print_config(version=vv)
-                        for k,v in config_output.items():
-                            f.write(f', {k}={v}')
+                versionpath = Path(f'{self.emul_dir}/version_{vv}')
+                versionpath.mkdir(parents=False, exist_ok=True)
+                file = Path(versionpath / 'errors.txt')
+                print(f'creating file: {file}')
+                with open(file, 'w') as f:
+                    f.write(f"#RESULTS INDIVIDUAL COSMOLOGIES:\n")
+                    f.write("#Simulation | MeanError | MedianError | ErrorStdDev\n")
+                    for i in range(len(err_mean_cosmo)):
+                        f.write(f" {_sim_lst_version[i]:10} , ")
+                        f.write(f"{err_mean_cosmo[i]:9.4f} , ")
+                        f.write(f"{err_median_cosmo[i]:11.4f} , ")
+                        f.write(f"{err_stddev_cosmo[i]:11.4f}\n")
 
                     f.write('\n')
+                    f.write("#####################################")
+                    f.write('\n\n')
+                    f.write("#RESULTS ALL VERSIONS\n")
+                    f.write(f'#MeanError | MedianError | ErrorStdDev | ConfigParam: \n')
+                    f.write(f'{err_mean:9.5f} , {err_median:11.5f} , {err_stddev:11.5f} , {self.print_config(vv)} \n')
                     f.close()
-                continue
 
-
-
-
-            print()
-            print("=====================================")
-            print()
+            
             
 
         dur_tot = time.time() - t0_tot
@@ -398,28 +416,28 @@ class emulator_test:
 
 
 
-param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
-test = emulator_test(
+# param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
+# test = emulator_test(
+#     root_dir="./tpcf_data",
+#     dataset="xi_over_xi_fiducial",
+#     emul_dir="time_test",
+#     flag="val",
+#     print_config_param=param_list,
+# )
+SAVEERRORS = True
+hidden_dims_test = emulator_test(
     root_dir="./tpcf_data",
     dataset="xi_over_xi_fiducial",
-    emul_dir="time_test",
+    emul_dir="hidden_dims_test",
     flag="val",
-    print_config_param=param_list,
-)
-
-dropout_test = emulator_test(
-    root_dir="./tpcf_data",
-    dataset="xi_over_xi_fiducial",
-    emul_dir="dropout_test",
-    flag="val",
-    print_config_param="dropout",
+    print_config_param="hidden_dims",
 )
 
 # test.plot_tpcf(range(0,3))
-# test.save_tpcf_errors()
-SAVEFIG = True
-PRESENTATION = True
-test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=False, xi_ratio=True)
-test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=True, xi_ratio=False)
+# test.save_tpcf_errors([0])
+hidden_dims_test.save_tpcf_errors()
+# SAVEFIG = True
+# PRESENTATION = True
+# test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=False, xi_ratio=True)
+# test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=True, xi_ratio=False)
 
-# dropout_test.save_tpcf_errors()
