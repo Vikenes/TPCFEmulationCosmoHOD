@@ -12,7 +12,7 @@ data:
     label_scaler:    "StandardScaler"
 
 model:
-    hidden_dims:    [1024,1024]
+    hidden_dims:    [512,512,512]
     activation:     "gelu"
     loss:           "L1Loss"
     dropout:        0.0
@@ -24,7 +24,7 @@ model:
  
 training:
     gpus:               [0]
-    max_epochs:         500
+    max_epochs:         750
     patience:           100
     use_swa:            false
     swa_start:          50
