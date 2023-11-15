@@ -8,7 +8,6 @@ import yaml
 from typing import List, Optional, Union
 import time 
 import typing 
-
 import sys 
 sys.path.append("../emul_utils")
 from _nn_config import DataConfig, TrainingConfig, ModelConfig
@@ -20,6 +19,8 @@ from _plot import set_matplotlib_settings, get_CustomCycler
 set_matplotlib_settings()
 custom_cycler = get_CustomCycler()
 
+import warnings 
+warnings.filterwarnings("ignore", category=UserWarning, message="Input line")
 
 global SAVEFIG 
 global PUSH
@@ -33,7 +34,7 @@ SAVEERRORS      = False
 TRANSFORM       = False
 PRESENTATION    = False
 
-
+dataset_names = {"train": "Training", "val": "Validation", "test": "Test"}
 
 class cm_emulator_class:
     def __init__(
@@ -82,13 +83,17 @@ class emulator_test:
         self.r_key          = data_config.feature_columns[13]    # r key in feature columns, e.g. "r", "log10r"
         self.xi_key         = data_config.label_columns[0]      # xi key in label columns
 
+        with h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r') as fff:
+            self.simulation_keys = [key for key in fff.keys() if key.startswith("AbacusSummit")]
+            self.N_simulations   = len(self.simulation_keys)
+
         # The keys of the config file to be printed during plotting
         # Makes comparison of different versions easier by seeing which parameters correspond to which errors
         # For e.g. "learning_rate", "patience", the values of these parameters are printed during plotting for each version 
         self.print_config_param     = [print_config_param] if type(print_config_param) != list and print_config_param is not None else print_config_param
 
 
-    def print_config(self, version):
+    def print_config(self, version, save=SAVEERRORS):
         """
         Prints the config parameter values for an emulator version
         corresponding to the keys in self.print_config_param
@@ -100,7 +105,7 @@ class emulator_test:
 
 
         if self.print_config_param is not None:
-            if SAVEERRORS:
+            if save:
                 return vv_config_output
             else:
                 
@@ -118,15 +123,14 @@ class emulator_test:
         
         flag = self.flag 
         
-        fff_common   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        r_common     = fff_common["r"][...]
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        r_common     = fff["r"][...]
         if r_error_mask:
             r_error_mask = r_common < max_r_error
         else:
             r_error_mask = np.ones_like(r_common, dtype=bool)
         r_common     = r_common[r_error_mask]
         r_len        = len(r_common)
-        fff_common.close()
 
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
@@ -141,11 +145,7 @@ class emulator_test:
 
             _err_lst_version = []
             _sim_lst_version = []
-            fff = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-            for simulation_key in fff.keys():
-                if not simulation_key.startswith("AbacusSummit"):
-                    # Skip the xi_fiducial and r keys
-                    continue
+            for simulation_key in self.simulation_keys:
                 s_ = simulation_key.split("_")
                 _sim_lst_version.append(f"{s_[2]}_{s_[3]}")
                 fff_cosmo = fff[simulation_key]
@@ -161,7 +161,7 @@ class emulator_test:
                             ))
                     _emulator       = cm_emulator_class(version=vv, LIGHTING_LOGS_PATH=self.emul_dir)
                     
-                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_error_mask]
+                    xi_data         = fff_cosmo_HOD[self.xi_key][...][r_error_mask]
                     xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
 
                     rel_err         = np.abs(xi_emul / xi_data - 1)
@@ -170,8 +170,6 @@ class emulator_test:
 
                 _err_lst_version.append(_err_lst_cosmo)
             
-            fff.close()
-
             err_all     = np.array(_err_lst_version)
             err_mean_cosmo   = np.mean(err_all, axis=(1,2))
             err_median_cosmo = np.median(err_all, axis=(1,2))
@@ -185,57 +183,32 @@ class emulator_test:
             dur_vv_list.append(dur_vv)
             print(f" - {dur_vv=:.2f} s")
 
-            #### FIX SAVEERRORS
-            if not SAVEERRORS:
-                """ 
-                Display errors and relevant config parameters for each version
-                """
-                # print(f'VERSION {vv}:')
-                print(f"ALL VERSION {vv}  - {dur_vv=:.2f} s:")
-                print(f"TOTAL:")
-                print(f" - {err_mean=:.4f}")
-                print(f" - {err_median=:.4f}")
-                print(f" - {err_stddev=:.4f}")
-                print("PARAMS:")
-                self.print_config(version=vv)
-                print()
-                print(f"MEAN COSMOLOGY:")
-                print("Simulation | MeanError | MedianError | ErrorStdDev")
+            """
+            Save errors to file
+            """
+            print(f'Saving errors for version {vv}')
+            versionpath = Path(f'{self.emul_dir}/version_{vv}')
+            versionpath.mkdir(parents=False, exist_ok=True)
+            file = Path(versionpath / 'errors.txt')
+            print(f'creating file: {file}')
+            with open(file, 'w') as f:
+                f.write(f"#RESULTS INDIVIDUAL COSMOLOGIES:\n")
+                f.write("#Simulation | MeanError | MedianError | ErrorStdDev\n")
                 for i in range(len(err_mean_cosmo)):
-                    print(f"{_sim_lst_version[i]:10}", end=" | ")
-                    print(f"{err_mean_cosmo[i]:9.4f}", end=" | ")
-                    print(f"{err_median_cosmo[i]:11.4f}", end=" | ")
-                    print(f"{err_stddev_cosmo[i]:11.4f}")
+                    f.write(f" {_sim_lst_version[i]:10} , ")
+                    f.write(f"{err_mean_cosmo[i]:9.4f} , ")
+                    f.write(f"{err_median_cosmo[i]:11.4f} , ")
+                    f.write(f"{err_stddev_cosmo[i]:11.4f}\n")
 
-                print()
-                print("=====================================")
-                print()
-
-            else:
-                """
-                Save errors to file
-                """
-                print(f'Saving errors for version {vv}')
-                versionpath = Path(f'{self.emul_dir}/version_{vv}')
-                versionpath.mkdir(parents=False, exist_ok=True)
-                file = Path(versionpath / 'errors.txt')
-                print(f'creating file: {file}')
-                with open(file, 'w') as f:
-                    f.write(f"#RESULTS INDIVIDUAL COSMOLOGIES:\n")
-                    f.write("#Simulation | MeanError | MedianError | ErrorStdDev\n")
-                    for i in range(len(err_mean_cosmo)):
-                        f.write(f" {_sim_lst_version[i]:10} , ")
-                        f.write(f"{err_mean_cosmo[i]:9.4f} , ")
-                        f.write(f"{err_median_cosmo[i]:11.4f} , ")
-                        f.write(f"{err_stddev_cosmo[i]:11.4f}\n")
-
-                    f.write('\n')
-                    f.write("#####################################")
-                    f.write('\n\n')
-                    f.write("#RESULTS ALL VERSIONS\n")
-                    f.write(f'#MeanError | MedianError | ErrorStdDev | ConfigParam: \n')
-                    f.write(f'{err_mean:9.5f} , {err_median:11.5f} , {err_stddev:11.5f} , {self.print_config(vv)} \n')
-                    f.close()
+                f.write('\n')
+                f.write("#####################################")
+                f.write('\n\n')
+                f.write("#RESULTS ALL VERSIONS\n")
+                f.write(f'#MeanError | MedianError | ErrorStdDev | ConfigParam: \n')
+                f.write(f'{err_mean:9.5f} , {err_median:11.5f} , {err_stddev:11.5f} , {self.print_config(vv)} \n')
+                f.close()
+        
+        fff.close()
 
             
             
@@ -246,26 +219,75 @@ class emulator_test:
         print(f"Average time per version: {dur_vv_avg=:.2f} s")
 
 
+    def print_tpcf_errors(
+            self, 
+            plot_versions:          Union[List[int], range, str] = "all",
+            print_individual:       bool = False,
+            ):
+        
+        flag = self.flag 
+        
 
-    
-      
+        if type(plot_versions) == list or type(plot_versions) == range:
+            version_list = plot_versions
+        else:
+            version_list = range(self.N_versions)
+
+        for vv in version_list:
+            version_path    = Path(self.emul_dir / f'version_{vv}')
+            error_file      = Path(version_path / 'errors.txt')
+            if not error_file.exists():
+                raise FileNotFoundError(f'File {error_file} does not exist.')
+
+            tot_errors = np.loadtxt(error_file, delimiter=',', usecols=[0,1,2], skiprows=self.N_simulations+2, max_rows=1)
+            """ 
+            Display errors and relevant config parameters for each version
+            """
+            if print_individual:
+                sim_versions = np.loadtxt(error_file, delimiter=',', usecols=0, max_rows=self.N_simulations, dtype=str)
+                sim_errors   = np.loadtxt(error_file, delimiter=',', usecols=[1,2,3], max_rows=self.N_simulations)
+                print(f"INDIVIDUAL SIMULATIONS:")
+                print("Simulation | MeanError | MedianError | ErrorStdDev")
+                for i in range(len(sim_errors)):
+                    print(f"{sim_versions[i]:10}", end=" | ")
+                    print(f"{sim_errors[i,0]:9.4f}", end=" | ")
+                    print(f"{sim_errors[i,1]:11.4f}", end=" | ")
+                    print(f"{sim_errors[i,2]:11.4f}")
+            training_dur = np.loadtxt(f"{version_path}/training_duration.txt", dtype=str, delimiter="_")
+            print(f"TOTAL ERRORS, VERSION {vv}:")
+            print(f" - MEAN:   {tot_errors[0]:.4f}")
+            print(f" - MEDIAN: {tot_errors[1]:.4f}")
+            print(f" - STD:    {tot_errors[2]:.4f}")
+            print("PARAMS:")
+            self.print_config(version=vv, save=False)
+            print(f"Training duration:")
+            print(f" - {training_dur}")
+
+            # print()
+            print("=====================================")
+            print()
+
+            
 
     def plot_tpcf(
             self, 
             plot_versions:          Union[List[int], range, str] = "all",
-            max_r_error:            float = 60.0,
-            nodes_per_simulation:   int = 1,
-            masked_r:               bool = False,
-            xi_ratio:               bool = True,
-            # plot_every_n:           int = 1,
+            max_r_error:            float   = 60.0,
+            nodes_per_simulation:   int     = 1,
+            masked_r:               bool    = True,
+            xi_ratio:               bool    = False,
             ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
         flag = self.flag 
         np.random.seed(42)
         
-        fff_common   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        xi_fiducial_ = fff_common["xi_fiducial"][...]
-        r_common_    = fff_common["r"][...]
-        fff_common.close()
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        xi_fiducial_ = fff["xi_fiducial"][...]
+        r_common_    = fff["r"][...]
 
         if masked_r:
             r_mask  = r_common_ < max_r_error
@@ -291,13 +313,7 @@ class emulator_test:
             ax1 = plt.subplot(gs[1])
             ax0.set_prop_cycle(custom_cycler)
 
-            fff = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-            N_simulations = len(fff.keys())
-            for iii, simulation_key in enumerate(fff.keys()):
-                if not simulation_key.startswith("AbacusSummit"):
-                    # Skip the xi_fiducial and r keys
-                    N_simulations -= 1
-                    continue
+            for simulation_key in self.simulation_keys:
                 
                 fff_cosmo = fff[simulation_key]
                 nodes_idx = np.random.randint(0, len(fff_cosmo.keys()), nodes_per_simulation)
@@ -328,10 +344,9 @@ class emulator_test:
                     ax1.plot(r_common, rel_err, color="gray", linewidth=0.7, alpha=0.5)
 
 
-            fff.close()
-            
             for i in range(1, 4):
-                ax1.plot(r_common,
+                ax1.plot(
+                    r_common,
                     np.ones_like(r_common) * 10**(-i),
                     linewidth=0.8,
                     linestyle="--",
@@ -339,8 +354,6 @@ class emulator_test:
                     zorder=100,
                 )
 
-            # ax0.set_xlim([-3, 0.1])
-            # ax1.set_xlim([-3, 0.1])
             ax0.set_ylim([1e-2, 1e4])
             ax1.set_ylim([1e-4, 1e0])
 
@@ -358,8 +371,9 @@ class emulator_test:
             ax0.set_yscale("log")
             ax1.set_yscale("log")
             ax1.set_xscale("log")
-
-            ax0.set_title(rf"version {vv}. {N_simulations} different sets of $\displaystyle \mathcal{{C}}$")
+            plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
+            plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
+            ax0.set_title(plot_title)
 
             ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
             ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
@@ -367,15 +381,11 @@ class emulator_test:
 
             if not SAVEFIG:
                 if masked_r:
-                    ax0.plot(r_common_, np.ones_like(r_common_), lw=0)
+                    ax0.plot(r_common, np.ones_like(r_common), lw=0)
                 plt.show()
-                # continue
-                exit()
             
             else:
             
-                # figdir = f'./plots/{self.emul_dir}'
-                
 
                 if PRESENTATION:
                     fig_dir_list = list(self.fig_dir.parts)
@@ -392,10 +402,11 @@ class emulator_test:
                 else:
                     figtitle += "_xi"
                 if masked_r:
-                    figtitle += "_masked_r"
+                    figtitle += f"_r_max{max_r_error:.0f}"
                 if PRESENTATION:
                     week_number = datetime.now().strftime("%U")
                     figtitle = f"week{int(week_number)}_{figtitle}"
+
 
                 figtitle += ".png"
                 figname = Path(figdir / figtitle)
@@ -414,7 +425,7 @@ class emulator_test:
                     os.system(f'git commit -m "add plot {figname}"')
                     os.system('git push')
 
-
+        fff.close()
 
 # param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
 # test = emulator_test(
@@ -424,7 +435,7 @@ class emulator_test:
 #     flag="val",
 #     print_config_param=param_list,
 # )
-SAVEERRORS = True
+
 hidden_dims_test = emulator_test(
     root_dir="./tpcf_data",
     dataset="xi_over_xi_fiducial",
@@ -435,7 +446,10 @@ hidden_dims_test = emulator_test(
 
 # test.plot_tpcf(range(0,3))
 # test.save_tpcf_errors([0])
-hidden_dims_test.save_tpcf_errors()
+# hidden_dims_test.save_tpcf_errors()
+# hidden_dims_test.print_tpcf_errors()
+SAVEFIG = True
+hidden_dims_test.plot_tpcf([3], nodes_per_simulation=2)
 # SAVEFIG = True
 # PRESENTATION = True
 # test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=False, xi_ratio=True)
