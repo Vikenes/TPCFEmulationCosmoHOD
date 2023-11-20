@@ -19,7 +19,7 @@ from _plot import set_matplotlib_settings, get_CustomCycler
 set_matplotlib_settings()
 custom_cycler = get_CustomCycler()
 
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, InterpolatedUnivariateSpline as ius
 from scipy.integrate import simpson 
 
 import warnings 
@@ -95,6 +95,11 @@ class emulator_test:
         # For e.g. "learning_rate", "patience", the values of these parameters are printed during plotting for each version 
         self.print_config_param     = [print_config_param] if type(print_config_param) != list and print_config_param is not None else print_config_param
 
+        fff         = h5py.File(self.data_dir / f"TPCF_{self.flag}_ng_fixed.hdf5", 'r')
+        self.r_common    = fff["r"][...]
+        self.xi_fiducial = fff["xi_fiducial"][...]
+        fff.close()
+
 
     def print_config(self, version, save=SAVEERRORS):
         """
@@ -127,8 +132,7 @@ class emulator_test:
         
         flag = self.flag 
         
-        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        r_common    = fff["r"][...]
+        r_common    = self.r_common
         if r_error_mask:
             if min_r_error is not None:
                 r_error_mask = (r_common < max_r_error) & (r_common > min_r_error)
@@ -144,6 +148,7 @@ class emulator_test:
         else:
             version_list = range(self.N_versions)
 
+        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         t0_tot = time.time()
         dur_vv_list = []
 
@@ -299,7 +304,39 @@ class emulator_test:
             print()
 
 
+    def compute_wp(
+            self,
+            r_error_mask:   bool    = False,
+            max_r_error:    float   = 60.0,
+            r_perp_min:     float   = 0.5,
+            r_perp_max:     float   = 60.0,
+            r_para_min:     float   = 0.0,
+            r_para_max:     float   = 100.0,
+            N_perp:         int     = 30,
 
+    ):
+        flag        = self.flag
+        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        r_common    = fff["r"][...]
+        if r_error_mask:
+            r_error_mask = r_common < max_r_error
+        else:
+            r_error_mask = np.ones_like(r_common, dtype=bool)
+
+        # Get masked r and xi data 
+        r_common    = r_common[r_error_mask]
+        xi_fiducial = fff["xi_fiducial"][...][r_error_mask]
+
+        r_perp_binedge = np.geomspace(r_perp_min, r_perp_max, N_perp)
+        r_perp = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
+        r_para = np.linspace(r_para_min, r_para_max, int(1e3))
+        xiR_func = ius(r_common, xi_fiducial)
+        wp = 2.0 * simpson(
+            xiR_func(np.sqrt(r_perp.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)),
+            r_para,
+            axis=-1,
+        )
+        return r_perp, wp
 
     def compute_proj_corrfunc(
             self, 
@@ -315,9 +352,6 @@ class emulator_test:
         fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         r_common    = fff["r"][...]
         rlen = len(r_common)
-        rlog = len(r_common[r_common<5]) * 100 / rlen
-        rlin = len(r_common[r_common>5]) * 100 / rlen
-
 
         if r_error_mask:
             if min_r_error is not None:
@@ -332,100 +366,44 @@ class emulator_test:
         xi_fiducial = fff["xi_fiducial"][...][r_error_mask]
 
         # Set up perpendicular rp array
-        rp0 = r_common[0] + 1e-5
-        if log_rp:
-            rp_ = np.logspace(np.log10(rp0), np.log10(30), 100)            
-        else:
-            rp_ = np.linspace(rp0, 30, 100)            
+        N_perp     = 30
+        r_perp_min  = 0.5 
+        r_perp_max  = 60.0
 
-        # Make r array for interpolation/integration
-        N_r     = int(1e4)
-        if log_r:
-            
-            r_int2 = np.array([np.logspace(np.log10(rp_i+1e-5), np.log10(r_common[-1]), N_r) for rp_i in rp_])
-        else:
-            r_int2 = np.array([np.linspace(rp_i+1e-5, r_common[-1], N_r) for rp_i in rp_])
-        
-        if log_fixed_r:
-            r_fixed   = np.logspace(np.log10(r_common[0]), np.log10(r_common[-1]), N_r)
-        else:
-            r_fixed   = np.linspace(r_common[0], r_common[-1], N_r)
+        N_para     = int(1e4)
+        pi_max      = 100.0 
 
-        # Nrlog = int(N_r * rlog / 100)
-        # Nrlin = int(N_r * rlin / 100) + 1
-        # r_intlog = np.logspace(np.log10(rp0), np.log10(5), Nrlog, endpoint=False)
-        # r_intlin = np.linspace(5, r_common[-1], Nrlin)
-        # r_fixed  = np.concatenate((r_intlog, r_intlin))
-            # r_int2 = np.zeros((len(rp_), N_r))
-            # for i in range(len(rp_)):
-            #     if rp_[i] < 5:
-            #         r_int2[i] = np.logspace(np.log10(rp_[i]+1e-5), np.log10(r_common[-1]), N_r)
-            #     else:
-            #         r_int2[i] = np.linspace(rp_[i]+1e-5, r_common[-1], N_r)
-        
-        # Broadcast r and rp to 2D arrays of equal shape (rp, r) 
-        rp          = np.tile(rp_, (len(r_fixed),1)).T
-        r_int_fixed = np.tile(r_fixed, (len(rp_),1))
+        r_perp_binedges      = np.geomspace(r_perp_min, r_perp_max, N_perp)
+        r_perp = (r_perp_binedges[1:] + r_perp_binedges[:-1]) / 2
+        r_para      = np.linspace(0, pi_max, N_para)
 
-        # Interpolate xi(r) to get xi(r_int)
-        xi_interp   = interp1d(r_common, xi_fiducial, kind="linear")
-        xi_fixed_r  = xi_interp(r_int_fixed)
-        xi_int2     = xi_interp(r_int2)
+
+        xi_of_r_func     = ius(r_common, xi_fiducial)
+        r_from_r_perp_r_para = np.sqrt(r_perp.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)
 
         ### Vectorized integration
-        # Set negative values to inf to avoid warnings
-        # Makes integrand zero for r < rp, so integral is effectively from rp to r_max
-        denom_squared = r_int_fixed**2 - rp**2 
-        denom_squared[denom_squared <= 0] = np.inf  
-
-        # Compute integral over r_int  
-        integrand_fixed_r   = 2.0 * r_int_fixed * xi_fixed_r / np.sqrt(denom_squared) 
-        intergand2          = 2.0 * r_int2 * xi_int2 / np.sqrt(r_int2**2 - rp**2)
-        wp_fixed_r          = simpson(integrand_fixed_r, r_int_fixed, axis=1, ) # axis=1 returns wp(rp) array
-        wp2                 = simpson(intergand2, r_int2, axis=1, ) # axis=1 returns wp(rp) array
-
-        r_common_masked = r_common[(r_common > rp_[0]) & (r_common < rp_[-1])]
-        label_fixed_r = "fixed r" if not log_fixed_r else "fixed log r"
-        label_r = "log r" if log_r else "r"
-        # plt.plot(rp_, rp_ * wp_fixed_r, "o-", color="red", ms=1, lw=0.7, label=label_fixed_r)
-        # plt.plot(rp_, rp_ * wp2, "o-", color="black", ms=1, lw=0.7, label=label_r)
-
-        # plt.plot(r_common_masked, np.ones_like(r_common_masked) * 200, "x", ms=2, lw=0.7)
-        # plt.title(fr"$r\in[{r_common[0]:.2f}, {r_common[-1]:.2f}]$")
-        # plt.xscale("log")
-        # plt.legend()
-        # plt.show()
-        return rp_, wp_fixed_r, wp2
+        wp_from_xi_r = 2.0 * simpson(
+            xi_of_r_func(r_from_r_perp_r_para),
+            r_para, 
+            axis=-1)
+        return r_perp, wp_from_xi_r
 
     def plot_proj_corrfunc(self):
-        rp, wp_fixed_r, wp2 = self.compute_proj_corrfunc([3])
-        logrp, logwp_fixed_r, logwp2 = self.compute_proj_corrfunc([3], log_rp=True, log_fixed_r=True, log_r=True)
-        fig, ax = plt.subplots(2, 2, figsize=(10, 10))
+        rp, wp  = self.compute_proj_corrfunc([3])
+        print(wp)
+        r, w    = self.compute_wp()
+        fig, ax = plt.subplots(figsize=(10, 10))
 
-        ax[0,0].plot(rp, rp * wp_fixed_r,   "o-", color="red",   ms=1, lw=0.7, label="wp fixed r")
-        ax[0,0].plot(rp, rp * wp2,          "o-", color="black", ms=1, lw=0.7, label="wp unfixed r")
+        ax.plot(rp, rp * wp,   "o-", color="black",   ms=1, lw=1, label="wp2")
+        ax.plot(r, r * w,      "x", color="red", ms=1, lw=0, label="wp RUAN 00")
 
-        ax[0,1].plot(rp, rp * logwp_fixed_r,    "o-", color="red", ms=1, lw=0.7, label="log(wp) fixed r")
-        ax[0,1].plot(rp, rp * logwp2,           "o-", color="black", ms=1, lw=0.7, label="log(wp) unfixed r")
-
-        ax[1,0].plot(logrp, logrp * wp_fixed_r, "o-", color="blue", ms=1, lw=0.7, label="wp fixed log(r)")
-        ax[1,0].plot(logrp, logrp * wp2,        "o-", color="green", ms=1, lw=0.7, label="wp unfixed log(r)")
-
-        ax[1,1].plot(logrp, logrp * logwp_fixed_r,  "o-", color="blue", ms=1, lw=0.7, label="log(wp) fixed log(r)")
-        ax[1,1].plot(logrp, logrp * logwp2,         "o-", color="green", ms=1, lw=0.7, label="log(wp) unfixed log(r)")
-
-        for i in range(2):
-            for j in range(2):
-                ax[i,j].legend()
-                ax[i,j].set_xscale("log")
-                if i == 0:
-                    ax[i,j].set_xlabel(r"$r_p$")
-                if i == 1:
-                    ax[i,j].set_xlabel(r"$\log(r_p)$")
-
-        # plt.plot(r_common_masked, np.ones_like(r_common_masked) * 200, "x", ms=2, lw=0.7)
-        # plt.title(fr"$r\in[{r_common[0]:.2f}, {r_common[-1]:.2f}]$")
+        ax.set_xscale("log")
+        ax.set_yscale("log")
+        ax.set_xlabel(r"$r_p$")
+        ax.set_ylabel(r"$r_p w_p$")
+        ax.legend()
         plt.show()
+
         
 
 
@@ -446,16 +424,17 @@ class emulator_test:
         np.random.seed(42)
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        xi_fiducial_ = fff["xi_fiducial"][...]
-        r_common_    = fff["r"][...]
+        # xi_fiducial_ = self.xi_fiducial# fff["xi_fiducial"][...]
+        # r_common_    = self.r_common #fff["r"][...]
 
         if masked_r:
-            r_mask  = r_common_ < max_r_error
+            # r_mask  = r_common_ < max_r_error
+            r_common = self.r_common[self.r_common < max_r_error]
+            xi_fiducial = self.xi_fiducial[self.r_common < max_r_error]
         else:
-            r_mask  = np.ones_like(r_common_, dtype=bool)
+            r_common = self.r_common
+            xi_fiducial = self.xi_fiducial
 
-        r_common    = r_common_[r_mask]
-        xi_fiducial = xi_fiducial_[r_mask]
         r_len       = len(r_common)
 
 
