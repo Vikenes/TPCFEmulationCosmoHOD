@@ -307,11 +307,13 @@ class emulator_test:
     def compute_wp(
             self,
             xi_data:        np.ndarray,
-            r_perp_min:     float   = 0.0,
+            r_perp_min:     float   = 0.5,
             r_perp_max:     float   = 40.0,
             N_perp:         int     = 40,
             r_para_max:     float   = 100.0,
             N_para:         int     = int(1e4),
+            lin:            bool    = False,
+            linlog:         bool    = False,
 
     ):
         """
@@ -320,20 +322,26 @@ class emulator_test:
         with r = sqrt(r_perp^2 + r_para^2). 
         """
 
-        # fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        # if r_error_mask:
-        #     r_mask = self.r_common < max_r_error
-        # else:
-        #     r_mask = np.ones_like(self.r_common, dtype=bool)
-
         r_common    = self.r_common#[r_mask]
         xi          = xi_data#[r_mask]
 
-        r_perp_binedge  = np.geomspace(r_perp_min, r_perp_max, N_perp)
+        if lin:
+            r_perp_binedge  = np.linspace(r_perp_min, r_perp_max, N_perp)
+        elif linlog:
+            N_perp_frac = r_common[r_common < 5].shape[0] / r_common[r_common > 5].shape[0]
+            N_perp_log = int(N_perp * N_perp_frac)
+            N_perp_lin = N_perp - N_perp_log
+            r_perp_log = np.geomspace(0.5, 5, N_perp_log, endpoint=False)
+            r_perp_lin = np.linspace(5, r_perp_max, N_perp_lin)
+            r_perp_binedge = np.concatenate((r_perp_log, r_perp_lin))
+
+        else:
+            r_perp_binedge  = np.geomspace(r_perp_min, r_perp_max, N_perp)
+
         r_perp_bins     = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
         pi_upper_lim    = np.sqrt(np.max(r_common.reshape(-1,1)**2 - r_perp_bins.reshape(1,-1)**2))
         pi_max          = np.min([pi_upper_lim, r_para_max]) #- 10
-        # print(f"{pi_upper_lim=:.2f} - {r_para_max=:.2f}, {pi_max=:.2f}, {max_r_error=:.2f}")
+        # pi_max          = r_para_max#]) #- 10
         r_para          = np.linspace(0, pi_max, N_para)
 
         # Callable func to interpolate xi(r) 
@@ -341,16 +349,16 @@ class emulator_test:
             r_common, 
             xi,
             )
-        # Integrate xi(r) over r_para
+
         wp = 2.0 * simpson(
             xiR_func(np.sqrt(r_perp_bins.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)), 
             r_para, 
             axis=-1,
             )
-
-        # IS WP STRICTLY POSITIVE?
+      
         wp[wp < 0] = 0
         return r_perp_bins, wp
+
 
 
     def plot_proj_corrfunc(
@@ -412,23 +420,22 @@ class emulator_test:
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
                     xi_emul         = _emulator(params_batch, transform_=TRANSFORM) * xi_fiducial
+                    rp_data, wp_data = self.compute_wp(xi_data, r_perp_min=0.5)
+                    rp_emul, wp_emul = self.compute_wp(xi_emul, r_perp_min=0.5)
 
-                    rp_data, wp_data = self.compute_wp(xi_data, r_error_mask=masked_r)
-                    rp_emul, wp_emul = self.compute_wp(xi_emul, r_error_mask=masked_r)
+                    ax.plot(rp_data, rp_data * wp_data,     linewidth=0, marker="o", ls="solid",  markersize=2, alpha=1)
+                    ax.plot(rp_emul, rp_emul * wp_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
 
-                    ax.plot(rp_data, rp_data * wp_data, linewidth=0, marker='o', markersize=1, alpha=1)
-                    ax.plot(rp_emul, rp_emul * wp_emul, linewidth=1, alpha=1)
 
 
             ax.set_xscale("log")
             ax.set_yscale("log")
 
-            ylabel =  r"$r_\bot w_p(r_\bot)\:[h^{-2}\mathrm{Mpc}^{-2}]$"
+            ylabel =  r"$r_\bot w_p(r_\bot)\:[h^{-2}\,\mathrm{Mpc}^{2}]$"
 
             ax.set_xlabel(r'$\displaystyle  r_\bot \: [h^{-1} \mathrm{Mpc}]$',fontsize=18)
             ax.set_ylabel(ylabel,fontsize=22)
 
-            # ax.xaxis.set_ticklabels([])
             plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
             plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
             ax.set_title(plot_title)
@@ -438,7 +445,6 @@ class emulator_test:
             ax.legend(loc="upper right", fontsize=12)
 
             if not SAVEFIG:
-                ax.plot(r_common, np.ones_like(r_common), lw=0)
                 plt.show()
                 exit()            
             else:
@@ -499,7 +505,7 @@ class emulator_test:
         xi_ratio: if True, plot xi/xi_fiducial of xi.  
         """
         flag = self.flag 
-        np.random.seed(42)
+        np.random.seed(43)
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         # xi_fiducial_ = self.xi_fiducial# fff["xi_fiducial"][...]
@@ -556,7 +562,7 @@ class emulator_test:
                         xi_emul = xi_emul * xi_fiducial
 
                     ax0.plot(r_common, xi_data, linewidth=0, marker='o', markersize=1, alpha=1)
-                    ax0.plot(r_common, xi_emul, linewidth=1, alpha=1)
+                    ax0.plot(r_common, xi_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
                     ax1.plot(r_common, rel_err, color="gray", linewidth=0.7, alpha=0.5)
 
 
@@ -666,9 +672,8 @@ hidden_dims_test = emulator_test(
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
 # SAVEFIG = False
-# hidden_dims_test.plot_tpcf([3], nodes_per_simulation=2)
-# hidden_dims_test.compute_proj_corrfunc([3])
-# hidden_dims_test.plot_proj_corrfunc([3])
+# hidden_dims_test.plot_tpcf([3], nodes_per_simulation=1)
+hidden_dims_test.plot_proj_corrfunc([3])
 
 
 # SAVEFIG = True
