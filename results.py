@@ -307,54 +307,50 @@ class emulator_test:
     def compute_wp(
             self,
             xi_data:        np.ndarray,
-            r_error_mask:   bool    = False,
-            max_r_error:    float   = 60.0,
-            r_perp_min:     float   = 0.5,
-            r_perp_max:     float   = 60.0,
+            r_perp_min:     float   = 0.0,
+            r_perp_max:     float   = 40.0,
+            N_perp:         int     = 40,
             r_para_max:     float   = 100.0,
-            N_perp:         int     = 30,
             N_para:         int     = int(1e4),
 
     ):
-        flag        = self.flag
-        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        if r_error_mask:
-            r_mask = self.r_common < max_r_error
-        else:
-            r_mask = np.ones_like(self.r_common, dtype=bool)
+        """
+        Computes projected correlation function wp(r_perp) from xi(r)
+        given by w_p(r_perp) = 2 * int_0^r_para_max xi(r) dr_para
+        with r = sqrt(r_perp^2 + r_para^2). 
+        """
 
-        r_common    = self.r_common[r_mask]
-        xi          = xi_data[r_mask]
-        # xi_fiducial = self.xi_fiducial[r_mask]
+        # fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        # if r_error_mask:
+        #     r_mask = self.r_common < max_r_error
+        # else:
+        #     r_mask = np.ones_like(self.r_common, dtype=bool)
 
-        # Get masked r and xi data 
-        # r_common    = r_common[r_error_mask]
-        # xi_fiducial = fff["xi_fiducial"][...][r_error_mask]
+        r_common    = self.r_common#[r_mask]
+        xi          = xi_data#[r_mask]
 
         r_perp_binedge  = np.geomspace(r_perp_min, r_perp_max, N_perp)
-        r_perp          = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
-        pi_upper_lim    = np.sqrt(np.max(r_common.reshape(-1,1)**2 - r_perp.reshape(1,-1)**2))
+        r_perp_bins     = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
+        pi_upper_lim    = np.sqrt(np.max(r_common.reshape(-1,1)**2 - r_perp_bins.reshape(1,-1)**2))
         pi_max          = np.min([pi_upper_lim, r_para_max]) #- 10
         # print(f"{pi_upper_lim=:.2f} - {r_para_max=:.2f}, {pi_max=:.2f}, {max_r_error=:.2f}")
         r_para          = np.linspace(0, pi_max, N_para)
+
+        # Callable func to interpolate xi(r) 
         xiR_func        = ius(
             r_common, 
             xi,
             )
+        # Integrate xi(r) over r_para
         wp = 2.0 * simpson(
-            xiR_func(np.sqrt(r_perp.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)), 
+            xiR_func(np.sqrt(r_perp_bins.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)), 
             r_para, 
             axis=-1,
             )
-        # plt.plot(r_perp, r_perp* wp)
-        # plt.yscale("log")
-        # plt.xscale("log")
-        # plt.show()
-        # exit()
-        
+
         # IS WP STRICTLY POSITIVE?
         wp[wp < 0] = 0
-        return r_perp, wp
+        return r_perp_bins, wp
 
 
     def plot_proj_corrfunc(
@@ -372,22 +368,20 @@ class emulator_test:
         """
      
         flag = self.flag 
-        # self.compute_wp(self.xi_fiducial)
-        np.random.seed(42)
+        np.random.seed(43)
         
 
         if masked_r:
-            r_mask = self.r_common_ < max_r_error
+            r_mask  = self.r_common < max_r_error
         else:
-            r_mask = np.ones_like(self.r_common, dtype=bool)
+            r_mask  = np.ones_like(self.r_common, dtype=bool)
 
         r_common    = self.r_common[r_mask]
-        print(r_common)
         xi_fiducial = self.xi_fiducial[r_mask]
         r_len       = len(r_common)
 
+        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
 
-        fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
         else:
@@ -512,13 +506,12 @@ class emulator_test:
         # r_common_    = self.r_common #fff["r"][...]
 
         if masked_r:
-            # r_mask  = r_common_ < max_r_error
-            r_common = self.r_common[self.r_common < max_r_error]
-            xi_fiducial = self.xi_fiducial[self.r_common < max_r_error]
+            r_mask  = self.r_common < max_r_error
         else:
-            r_common = self.r_common
-            xi_fiducial = self.xi_fiducial
+            r_mask = np.ones_like(self.r_common, dtype=bool)
 
+        r_common    = self.r_common[r_mask]
+        xi_fiducial = self.xi_fiducial[r_mask]
         r_len       = len(r_common)
 
 
@@ -585,8 +578,9 @@ class emulator_test:
             else:
                 ylabel =  r"$\xi_{gg}(r)$"
 
-            ax1.set_xlabel(r'$\displaystyle  r/h \: [\mathrm{Mpc}]$',fontsize=18)
-            ax1.set_ylabel(r'$\displaystyle \mathrm{rel. diff.}$',fontsize=20)
+            ax1.set_xlabel(r'$\displaystyle  r/  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+            ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
+
             ax0.set_ylabel(ylabel,fontsize=22)
 
             ax0.xaxis.set_ticklabels([])
@@ -671,10 +665,10 @@ hidden_dims_test = emulator_test(
 # test.save_tpcf_errors([0])
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
-# SAVEFIG = True
+# SAVEFIG = False
 # hidden_dims_test.plot_tpcf([3], nodes_per_simulation=2)
 # hidden_dims_test.compute_proj_corrfunc([3])
-hidden_dims_test.plot_proj_corrfunc([3])
+# hidden_dims_test.plot_proj_corrfunc([3])
 
 
 # SAVEFIG = True
