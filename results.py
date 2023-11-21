@@ -19,6 +19,9 @@ from _plot import set_matplotlib_settings, get_CustomCycler
 set_matplotlib_settings()
 custom_cycler = get_CustomCycler()
 
+from scipy.interpolate import interp1d, InterpolatedUnivariateSpline as ius
+from scipy.integrate import simpson 
+
 import warnings 
 warnings.filterwarnings("ignore", category=UserWarning, message="Input line")
 
@@ -92,6 +95,11 @@ class emulator_test:
         # For e.g. "learning_rate", "patience", the values of these parameters are printed during plotting for each version 
         self.print_config_param     = [print_config_param] if type(print_config_param) != list and print_config_param is not None else print_config_param
 
+        fff         = h5py.File(self.data_dir / f"TPCF_{self.flag}_ng_fixed.hdf5", 'r')
+        self.r_common    = fff["r"][...]
+        self.xi_fiducial = fff["xi_fiducial"][...]
+        fff.close()
+
 
     def print_config(self, version, save=SAVEERRORS):
         """
@@ -117,16 +125,19 @@ class emulator_test:
     def save_tpcf_errors(
             self, 
             plot_versions:          Union[List[int], range, str] = "all",
-            max_r_error:            float = 60.0,
-            r_error_mask:           bool = True,
+            r_error_mask:           bool            = True,
+            max_r_error:            float           = 60.0,
+            min_r_error:            Optional[float] = None,
             ):
         
         flag = self.flag 
         
-        fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        r_common     = fff["r"][...]
+        r_common    = self.r_common
         if r_error_mask:
-            r_error_mask = r_common < max_r_error
+            if min_r_error is not None:
+                r_error_mask = (r_common < max_r_error) & (r_common > min_r_error)
+            else:
+                r_error_mask = r_common < max_r_error
         else:
             r_error_mask = np.ones_like(r_common, dtype=bool)
         r_common     = r_common[r_error_mask]
@@ -137,6 +148,7 @@ class emulator_test:
         else:
             version_list = range(self.N_versions)
 
+        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         t0_tot = time.time()
         dur_vv_list = []
 
@@ -183,31 +195,55 @@ class emulator_test:
             dur_vv_list.append(dur_vv)
             print(f" - {dur_vv=:.2f} s")
 
-            """
-            Save errors to file
-            """
-            print(f'Saving errors for version {vv}')
-            versionpath = Path(f'{self.emul_dir}/version_{vv}')
-            versionpath.mkdir(parents=False, exist_ok=True)
-            file = Path(versionpath / 'errors.txt')
-            print(f'creating file: {file}')
-            with open(file, 'w') as f:
-                f.write(f"#RESULTS INDIVIDUAL COSMOLOGIES:\n")
-                f.write("#Simulation | MeanError | MedianError | ErrorStdDev\n")
-                for i in range(len(err_mean_cosmo)):
-                    f.write(f" {_sim_lst_version[i]:10} , ")
-                    f.write(f"{err_mean_cosmo[i]:9.4f} , ")
-                    f.write(f"{err_median_cosmo[i]:11.4f} , ")
-                    f.write(f"{err_stddev_cosmo[i]:11.4f}\n")
+            if SAVEERRORS:
+                """
+                Save errors to file
+                """
+                print(f'Saving errors for version {vv}')
+                versionpath = Path(f'{self.emul_dir}/version_{vv}')
+                versionpath.mkdir(parents=False, exist_ok=True)
+                file = Path(versionpath / 'errors.txt')
+                print(f'creating file: {file}')
+                with open(file, 'w') as f:
+                    f.write(f"#RESULTS INDIVIDUAL COSMOLOGIES:\n")
+                    f.write("#Simulation | MeanError | MedianError | ErrorStdDev\n")
+                    for i in range(len(err_mean_cosmo)):
+                        f.write(f" {_sim_lst_version[i]:10} , ")
+                        f.write(f"{err_mean_cosmo[i]:9.4f} , ")
+                        f.write(f"{err_median_cosmo[i]:11.4f} , ")
+                        f.write(f"{err_stddev_cosmo[i]:11.4f}\n")
 
-                f.write('\n')
-                f.write("#####################################")
-                f.write('\n\n')
-                f.write("#RESULTS ALL VERSIONS\n")
-                f.write(f'#MeanError | MedianError | ErrorStdDev | ConfigParam: \n')
-                f.write(f'{err_mean:9.5f} , {err_median:11.5f} , {err_stddev:11.5f} , {self.print_config(vv)} \n')
-                f.close()
-        
+                    f.write('\n')
+                    f.write("#####################################")
+                    f.write('\n\n')
+                    f.write("#RESULTS ALL VERSIONS\n")
+                    f.write(f'#MeanError | MedianError | ErrorStdDev | ConfigParam: \n')
+                    f.write(f'{err_mean:9.5f} , {err_median:11.5f} , {err_stddev:11.5f} , {self.print_config(vv)} \n')
+                    f.close()
+            else:
+                """ 
+                Display errors and relevant config parameters for each version
+                """
+                print(f"ALL VERSION {vv}  - {dur_vv=:.2f} s:")
+                print(f"TOTAL:")
+                print(f" - {err_mean=:.4f}")
+                print(f" - {err_median=:.4f}")
+                print(f" - {err_stddev=:.4f}")
+                print("PARAMS:")
+                self.print_config(version=vv)
+                print()
+                print(f"MEAN COSMOLOGY:")
+                print("Simulation | MeanError | MedianError | ErrorStdDev")
+                for i in range(len(err_mean_cosmo)):
+                    print(f"{_sim_lst_version[i]:10}", end=" | ")
+                    print(f"{err_mean_cosmo[i]:9.4f}", end=" | ")
+                    print(f"{err_median_cosmo[i]:11.4f}", end=" | ")
+                    print(f"{err_stddev_cosmo[i]:11.4f}")
+
+                print()
+                print("=====================================")
+                print()
+
         fff.close()
 
             
@@ -267,7 +303,193 @@ class emulator_test:
             print("=====================================")
             print()
 
+
+    def compute_wp(
+            self,
+            xi_data:        np.ndarray,
+            r_error_mask:   bool    = False,
+            max_r_error:    float   = 60.0,
+            r_perp_min:     float   = 0.5,
+            r_perp_max:     float   = 60.0,
+            r_para_max:     float   = 100.0,
+            N_perp:         int     = 30,
+            N_para:         int     = int(1e4),
+
+    ):
+        flag        = self.flag
+        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        if r_error_mask:
+            r_mask = self.r_common < max_r_error
+        else:
+            r_mask = np.ones_like(self.r_common, dtype=bool)
+
+        r_common    = self.r_common[r_mask]
+        xi          = xi_data[r_mask]
+        # xi_fiducial = self.xi_fiducial[r_mask]
+
+        # Get masked r and xi data 
+        # r_common    = r_common[r_error_mask]
+        # xi_fiducial = fff["xi_fiducial"][...][r_error_mask]
+
+        r_perp_binedge  = np.geomspace(r_perp_min, r_perp_max, N_perp)
+        r_perp          = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
+        pi_upper_lim    = np.sqrt(np.max(r_common.reshape(-1,1)**2 - r_perp.reshape(1,-1)**2))
+        pi_max          = np.min([pi_upper_lim, r_para_max]) #- 10
+        # print(f"{pi_upper_lim=:.2f} - {r_para_max=:.2f}, {pi_max=:.2f}, {max_r_error=:.2f}")
+        r_para          = np.linspace(0, pi_max, N_para)
+        xiR_func        = ius(
+            r_common, 
+            xi,
+            )
+        wp = 2.0 * simpson(
+            xiR_func(np.sqrt(r_perp.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)), 
+            r_para, 
+            axis=-1,
+            )
+        # plt.plot(r_perp, r_perp* wp)
+        # plt.yscale("log")
+        # plt.xscale("log")
+        # plt.show()
+        # exit()
+        
+        # IS WP STRICTLY POSITIVE?
+        wp[wp < 0] = 0
+        return r_perp, wp
+
+
+    def plot_proj_corrfunc(
+            self, 
+            plot_versions:          Union[List[int], range, str] = "all",
+            max_r_error:            float   = 60.0,
+            nodes_per_simulation:   int     = 1,
+            masked_r:               bool    = False,
+            xi_ratio:               bool    = False,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
+     
+        flag = self.flag 
+        # self.compute_wp(self.xi_fiducial)
+        np.random.seed(42)
+        
+
+        if masked_r:
+            r_mask = self.r_common_ < max_r_error
+        else:
+            r_mask = np.ones_like(self.r_common, dtype=bool)
+
+        r_common    = self.r_common[r_mask]
+        print(r_common)
+        xi_fiducial = self.xi_fiducial[r_mask]
+        r_len       = len(r_common)
+
+
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
+        if type(plot_versions) == list or type(plot_versions) == range:
+            version_list = plot_versions
+        else:
+            version_list = range(self.N_versions)
+
+        for vv in version_list:
+            print(f"Plotting version {vv}")
+            fig, ax = plt.subplots(figsize=(10, 9))
+            plt.rc('axes', prop_cycle=custom_cycler)
+            ax.set_prop_cycle(custom_cycler)
+
+            for simulation_key in self.simulation_keys:
+                
+                fff_cosmo = fff[simulation_key]
+                nodes_idx = np.random.randint(0, len(fff_cosmo.keys()), nodes_per_simulation)
+
+
+                for jj in nodes_idx:
+                    fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
+
+                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask] * xi_fiducial
+
+                    params_batch   = np.column_stack(
+                        (np.vstack(
+                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
+                            , r_common
+                            ))
+
+                    _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM) * xi_fiducial
+
+                    rp_data, wp_data = self.compute_wp(xi_data, r_error_mask=masked_r)
+                    rp_emul, wp_emul = self.compute_wp(xi_emul, r_error_mask=masked_r)
+
+                    ax.plot(rp_data, rp_data * wp_data, linewidth=0, marker='o', markersize=1, alpha=1)
+                    ax.plot(rp_emul, rp_emul * wp_emul, linewidth=1, alpha=1)
+
+
+            ax.set_xscale("log")
+            ax.set_yscale("log")
+
+            ylabel =  r"$r_\bot w_p(r_\bot)\:[h^{-2}\mathrm{Mpc}^{-2}]$"
+
+            ax.set_xlabel(r'$\displaystyle  r_\bot \: [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+            ax.set_ylabel(ylabel,fontsize=22)
+
+            # ax.xaxis.set_ticklabels([])
+            plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
+            plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
+            ax.set_title(plot_title)
+
+            ax.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
+            ax.plot([], linewidth=1, color='k', alpha=1, label="emulator")
+            ax.legend(loc="upper right", fontsize=12)
+
+            if not SAVEFIG:
+                ax.plot(r_common, np.ones_like(r_common), lw=0)
+                plt.show()
+                exit()            
+            else:
             
+
+                if PRESENTATION:
+                    fig_dir_list = list(self.fig_dir.parts)
+                    fig_dir_list.insert(1, "presentation")
+                    figdir = Path("").joinpath(*fig_dir_list)
+                else:
+                    figdir = self.fig_dir
+            
+                figdir.mkdir(parents=True, exist_ok=True)
+                
+                figtitle = f'version{vv}'
+                if xi_ratio:
+                    figtitle += "_xi_ratio"
+                else:
+                    figtitle += "_xi"
+                if masked_r:
+                    figtitle += f"_r_max{max_r_error:.0f}"
+                if PRESENTATION:
+                    week_number = datetime.now().strftime("%U")
+                    figtitle = f"week{int(week_number)}_{figtitle}"
+
+
+                figtitle += ".png"
+                figname = Path(figdir / figtitle)
+                
+
+                plt.savefig(
+                    figname,
+                    dpi=200 if figtitle.endswith(".png") else None,
+                    bbox_inches="tight",
+                    pad_inches=0.05,        
+                )
+                print(f'save plot to {figname}')
+                plt.close(fig)
+                if PUSH:
+                    os.system(f'git add {figname}')
+                    os.system(f'git commit -m "add plot {figname}"')
+                    os.system('git push')
+
+        fff.close()
+
 
     def plot_tpcf(
             self, 
@@ -286,16 +508,17 @@ class emulator_test:
         np.random.seed(42)
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        xi_fiducial_ = fff["xi_fiducial"][...]
-        r_common_    = fff["r"][...]
+        # xi_fiducial_ = self.xi_fiducial# fff["xi_fiducial"][...]
+        # r_common_    = self.r_common #fff["r"][...]
 
         if masked_r:
-            r_mask  = r_common_ < max_r_error
+            # r_mask  = r_common_ < max_r_error
+            r_common = self.r_common[self.r_common < max_r_error]
+            xi_fiducial = self.xi_fiducial[self.r_common < max_r_error]
         else:
-            r_mask  = np.ones_like(r_common_, dtype=bool)
+            r_common = self.r_common
+            xi_fiducial = self.xi_fiducial
 
-        r_common    = r_common_[r_mask]
-        xi_fiducial = xi_fiducial_[r_mask]
         r_len       = len(r_common)
 
 
@@ -447,9 +670,13 @@ hidden_dims_test = emulator_test(
 # test.plot_tpcf(range(0,3))
 # test.save_tpcf_errors([0])
 # hidden_dims_test.save_tpcf_errors()
-# hidden_dims_test.print_tpcf_errors()
-SAVEFIG = True
-hidden_dims_test.plot_tpcf([3], nodes_per_simulation=2)
+# hidden_dims_test.print_tpcf_errors([3])
+# SAVEFIG = True
+# hidden_dims_test.plot_tpcf([3], nodes_per_simulation=2)
+# hidden_dims_test.compute_proj_corrfunc([3])
+hidden_dims_test.plot_proj_corrfunc([3])
+
+
 # SAVEFIG = True
 # PRESENTATION = True
 # test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=False, xi_ratio=True)
