@@ -12,23 +12,25 @@ data:
     label_scaler:    "StandardScaler"
 
 model:
-    hidden_dims:    [512,512,512]
-    activation:     "gelu"
-    loss:           "L1Loss"
-    dropout:        0.0
-    learning_rate:  1.e-2
-    weight_decay:   5.e-6
-    zero_bias:      true 
-    batch_norm:     false
-    type:           FullyConnected
+    hidden_dims:        [512] #,512,512]
+    activation:         "gelu"
+    loss:               "L1Loss"
+    dropout:            0.0
+    learning_rate:      1.e-2
+    weight_decay:       5.e-6
+    scheduler_patience: 20
+    zero_bias:          true 
+    batch_norm:         false
+    type:               FullyConnected
  
 training:
     gpus:               [0]
-    max_epochs:         750
-    patience:           100
+    max_epochs:         5
+    stopping_patience:  100
     use_swa:            false
     swa_start:          50
     gamma:              0.97
     gradient_clip_val:  0.0
     default_root_dir:   "./tpcf_data/xi_over_xi_fiducial/emulators"
-    log_save_dir:       "hidden_dims_test"
+    log_save_dir:       "patience_store_param"
+

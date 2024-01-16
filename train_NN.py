@@ -74,7 +74,7 @@ model.apply(init_weights_small_variance)
 callbacks = []
 callbacks.append(EarlyStopping(
     monitor  = "loss/val", 
-    patience = train_config.patience, 
+    patience = train_config.stopping_patience, 
     mode     = "min", 
     verbose  = False,
     ))
