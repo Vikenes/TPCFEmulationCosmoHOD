@@ -498,6 +498,7 @@ class emulator_test:
             nodes_per_simulation:   int     = 1,
             masked_r:               bool    = True,
             xi_ratio:               bool    = False,
+            legend:                 bool    = False,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -505,7 +506,7 @@ class emulator_test:
         xi_ratio: if True, plot xi/xi_fiducial of xi.  
         """
         flag = self.flag 
-        np.random.seed(43)
+        np.random.seed(42)
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
         # xi_fiducial_ = self.xi_fiducial# fff["xi_fiducial"][...]
@@ -575,8 +576,10 @@ class emulator_test:
                     color='gray',
                     zorder=100,
                 )
-
-            ax0.set_ylim([1e-2, 1e4])
+            if masked_r:
+                ax0.set_ylim([1e-2, 1e4])
+            else:
+                ax0.set_ylim([1e-3, 1e4])
             ax1.set_ylim([1e-4, 1e0])
 
             if xi_ratio:
@@ -595,12 +598,13 @@ class emulator_test:
             ax1.set_yscale("log")
             ax1.set_xscale("log")
             plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
-            plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
+            plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for each of the {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
             ax0.set_title(plot_title)
 
             ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
             ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
-            ax0.legend(loc="upper right", fontsize=12)
+            if legend:
+                ax0.legend(loc="upper right", fontsize=12)
 
             if not SAVEFIG:
                 if masked_r:
@@ -626,6 +630,9 @@ class emulator_test:
                     figtitle += "_xi"
                 if masked_r:
                     figtitle += f"_r_max{max_r_error:.0f}"
+
+                figtitle += f"_{nodes_per_simulation}nodes"
+
                 if PRESENTATION:
                     week_number = datetime.now().strftime("%U")
                     figtitle = f"week{int(week_number)}_{figtitle}"
@@ -633,7 +640,6 @@ class emulator_test:
 
                 figtitle += ".png"
                 figname = Path(figdir / figtitle)
-                
 
                 plt.savefig(
                     figname,
@@ -671,9 +677,14 @@ hidden_dims_test = emulator_test(
 # test.save_tpcf_errors([0])
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
-# SAVEFIG = False
+# SAVEFIG = True
 # hidden_dims_test.plot_tpcf([3], nodes_per_simulation=1)
-hidden_dims_test.plot_proj_corrfunc([3])
+# print(SAVEFIG)
+hidden_dims_test.plot_tpcf([3], masked_r=False, nodes_per_simulation=2)
+hidden_dims_test.plot_tpcf([3], masked_r=True, nodes_per_simulation=2)
+
+# hidden_dims_test.plot_proj_corrfunc([3], masked_r=False)
+# hidden_dims_test.plot_proj_corrfunc([3], masked_r=True)
 
 
 # SAVEFIG = True
