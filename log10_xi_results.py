@@ -571,7 +571,7 @@ class emulator_test:
             ax1.set_ylim([1e-4, 1e0])
 
             ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
-            ax1.set_xlabel(r'$\displaystyle  r/  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+            ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
             ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
 
 
@@ -647,11 +647,11 @@ hidden_dims_test = emulator_test(
 # SAVEERRORS = True 
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
-# SAVEFIG = True
-# hidden_dims_test.plot_tpcf([4], masked_r=False, nodes_per_simulation=2)
+SAVEFIG = True
+hidden_dims_test.plot_tpcf([4], masked_r=False, nodes_per_simulation=2)
 hidden_dims_test.plot_tpcf([4], masked_r=True, nodes_per_simulation=2)
 # SAVEFIG = True
-# hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
+hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
 # hidden_dims_test.plot_proj_corrfunc([4], masked_r=True)
 
 
