@@ -59,9 +59,9 @@ class cm_emulator_class:
 
 class emulator_test:
     def __init__(self,
-                root_dir:  str = "./tpcf_data",
-                dataset:   str = "xi_over_xi_fiducial",
-                emul_dir:  str = "time_test",
+                root_dir:  str = "./tpcf_data/vary_r",
+                dataset:   str = "log10_xi",
+                emul_dir:  str = "hidden_dims_test",
                 flag:      str = "val",
                 print_config_param:     List[str] = None,
                 ):
@@ -95,10 +95,7 @@ class emulator_test:
         # For e.g. "learning_rate", "patience", the values of these parameters are printed during plotting for each version 
         self.print_config_param     = [print_config_param] if type(print_config_param) != list and print_config_param is not None else print_config_param
 
-        fff         = h5py.File(self.data_dir / f"TPCF_{self.flag}_ng_fixed.hdf5", 'r')
-        self.r_common    = fff["r"][...]
-        self.xi_fiducial = fff["xi_fiducial"][...]
-        fff.close()
+        
 
 
     def print_config(self, version, save=SAVEERRORS):
@@ -132,16 +129,16 @@ class emulator_test:
         
         flag = self.flag 
         
-        r_common    = self.r_common
-        if r_error_mask:
-            if min_r_error is not None:
-                r_error_mask = (r_common < max_r_error) & (r_common > min_r_error)
-            else:
-                r_error_mask = r_common < max_r_error
-        else:
-            r_error_mask = np.ones_like(r_common, dtype=bool)
-        r_common     = r_common[r_error_mask]
-        r_len        = len(r_common)
+        # r_common    = self.r_common
+        # if r_error_mask:
+        #     if min_r_error is not None:
+        #         r_error_mask = (r_common < max_r_error) & (r_common > min_r_error)
+        #     else:
+        #         r_error_mask = r_common < max_r_error
+        # else:
+        #     r_error_mask = np.ones_like(r_common, dtype=bool)
+        # r_common     = r_common[r_error_mask]
+        # r_len        = len(r_common)
 
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
@@ -166,15 +163,19 @@ class emulator_test:
 
                     fff_cosmo_HOD = fff_cosmo[params]
 
+                    r_data = fff_cosmo_HOD[self.r_key][...]
+                    r_mask          = r_data < max_r_error if r_error_mask else np.ones_like(r_data, dtype=bool)
+                    r_data          = r_data[r_mask]
+
                     params_batch   = np.column_stack(
                         (np.vstack(
-                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
-                            , r_common
+                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
+                            , r_data
                             ))
                     _emulator       = cm_emulator_class(version=vv, LIGHTING_LOGS_PATH=self.emul_dir)
                     
-                    xi_data         = fff_cosmo_HOD[self.xi_key][...][r_error_mask]
-                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
+                    xi_data         = 10**fff_cosmo_HOD[self.xi_key][...][r_mask]
+                    xi_emul         = 10**_emulator(params_batch, transform_=TRANSFORM)
 
                     rel_err         = np.abs(xi_emul / xi_data - 1)
                     _err_lst_cosmo.append(rel_err)
@@ -182,7 +183,7 @@ class emulator_test:
 
                 _err_lst_version.append(_err_lst_cosmo)
             
-            err_all     = np.array(_err_lst_version)
+            err_all          = np.array(_err_lst_version)
             err_mean_cosmo   = np.mean(err_all, axis=(1,2))
             err_median_cosmo = np.median(err_all, axis=(1,2))
             err_stddev_cosmo = np.std(err_all, axis=(1,2))
@@ -307,6 +308,7 @@ class emulator_test:
     def compute_wp(
             self,
             xi_data:        np.ndarray,
+            r_data:         np.ndarray,
             r_perp_min:     float   = 0.5,
             r_perp_max:     float   = 40.0,
             N_perp:         int     = 40,
@@ -322,13 +324,12 @@ class emulator_test:
         with r = sqrt(r_perp^2 + r_para^2). 
         """
 
-        r_common    = self.r_common#[r_mask]
         xi          = xi_data#[r_mask]
 
         if lin:
             r_perp_binedge  = np.linspace(r_perp_min, r_perp_max, N_perp)
         elif linlog:
-            N_perp_frac = r_common[r_common < 5].shape[0] / r_common[r_common > 5].shape[0]
+            N_perp_frac = r_data[r_data < 5].shape[0] / r_data[r_data > 5].shape[0]
             N_perp_log = int(N_perp * N_perp_frac)
             N_perp_lin = N_perp - N_perp_log
             r_perp_log = np.geomspace(0.5, 5, N_perp_log, endpoint=False)
@@ -339,15 +340,14 @@ class emulator_test:
             r_perp_binedge  = np.geomspace(r_perp_min, r_perp_max, N_perp)
 
         r_perp_bins     = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
-        pi_upper_lim    = np.sqrt(np.max(r_common.reshape(-1,1)**2 - r_perp_bins.reshape(1,-1)**2))
+        pi_upper_lim    = np.sqrt(np.max(r_data.reshape(-1,1)**2 - r_perp_bins.reshape(1,-1)**2))
         pi_max          = np.min([pi_upper_lim, r_para_max]) #- 10
-        # pi_max          = r_para_max#]) #- 10
         r_para          = np.linspace(0, pi_max, N_para)
 
         # Callable func to interpolate xi(r) 
         xiR_func        = ius(
-            r_common, 
-            xi,
+            r_data, 
+            xi_data,
             )
 
         wp = 2.0 * simpson(
@@ -367,7 +367,6 @@ class emulator_test:
             max_r_error:            float   = 60.0,
             nodes_per_simulation:   int     = 1,
             masked_r:               bool    = False,
-            xi_ratio:               bool    = False,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -376,17 +375,17 @@ class emulator_test:
         """
      
         flag = self.flag 
-        np.random.seed(43)
+        np.random.seed(42)
         
 
-        if masked_r:
-            r_mask  = self.r_common < max_r_error
-        else:
-            r_mask  = np.ones_like(self.r_common, dtype=bool)
+        # if masked_r:
+        #     r_mask  = self.r_common < max_r_error
+        # else:
+        #     r_mask  = np.ones_like(self.r_common, dtype=bool)
 
-        r_common    = self.r_common[r_mask]
-        xi_fiducial = self.xi_fiducial[r_mask]
-        r_len       = len(r_common)
+        # r_common    = self.r_common[r_mask]
+        # xi_fiducial = self.xi_fiducial[r_mask]
+        # r_len       = len(r_common)
 
         fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
 
@@ -410,18 +409,22 @@ class emulator_test:
                 for jj in nodes_idx:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
 
-                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask] * xi_fiducial
+                    r_data = fff_cosmo_HOD[self.r_key][...]
+                    r_mask = r_data < max_r_error if masked_r else np.ones_like(r_data, dtype=bool)
+                    r_data = r_data[r_mask]
+
+                    xi_data = 10**fff_cosmo_HOD[self.xi_key][...][r_mask] 
 
                     params_batch   = np.column_stack(
                         (np.vstack(
-                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
-                            , r_common
+                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
+                            , r_data
                             ))
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM) * xi_fiducial
-                    rp_data, wp_data = self.compute_wp(xi_data, r_perp_min=0.5)
-                    rp_emul, wp_emul = self.compute_wp(xi_emul, r_perp_min=0.5)
+                    xi_emul         = 10**_emulator(params_batch, transform_=TRANSFORM) 
+                    rp_data, wp_data = self.compute_wp(xi_data, r_data, r_perp_min=0.5)
+                    rp_emul, wp_emul = self.compute_wp(xi_emul, r_data, r_perp_min=0.5)
 
                     ax.plot(rp_data, rp_data * wp_data,     linewidth=0, marker="o", ls="solid",  markersize=2, alpha=1)
                     ax.plot(rp_emul, rp_emul * wp_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
@@ -446,9 +449,8 @@ class emulator_test:
 
             if not SAVEFIG:
                 plt.show()
-                exit()            
-            else:
             
+            else:
 
                 if PRESENTATION:
                     fig_dir_list = list(self.fig_dir.parts)
@@ -459,11 +461,7 @@ class emulator_test:
             
                 figdir.mkdir(parents=True, exist_ok=True)
                 
-                figtitle = f'version{vv}'
-                if xi_ratio:
-                    figtitle += "_xi_ratio"
-                else:
-                    figtitle += "_xi"
+                figtitle = f"version{vv}_xi"
                 if masked_r:
                     figtitle += f"_r_max{max_r_error:.0f}"
                 if PRESENTATION:
@@ -497,7 +495,6 @@ class emulator_test:
             max_r_error:            float   = 60.0,
             nodes_per_simulation:   int     = 1,
             masked_r:               bool    = True,
-            xi_ratio:               bool    = False,
             legend:                 bool    = False,
             ):
         """
@@ -509,18 +506,8 @@ class emulator_test:
         np.random.seed(42)
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        # xi_fiducial_ = self.xi_fiducial# fff["xi_fiducial"][...]
-        # r_common_    = self.r_common #fff["r"][...]
-
-        if masked_r:
-            r_mask  = self.r_common < max_r_error
-        else:
-            r_mask = np.ones_like(self.r_common, dtype=bool)
-
-        r_common    = self.r_common[r_mask]
-        xi_fiducial = self.xi_fiducial[r_mask]
-        r_len       = len(r_common)
-
+        # fff_key0 = fff.keys().__iter__().__next__()
+        # r_len = len(fff[fff_key0]["node0"]["r"][:])
 
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
@@ -545,32 +532,33 @@ class emulator_test:
                 for jj in nodes_idx:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
 
+                    r_data  = fff_cosmo_HOD[self.r_key][...]
+                    r_mask = r_data < max_r_error if masked_r else np.ones_like(r_data, dtype=bool)
+
+                    r_data  = r_data[r_mask]
                     xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask]
 
                     params_batch   = np.column_stack(
                         (np.vstack(
-                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * r_len)
-                            , r_common
+                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
+                            , r_data
                             ))
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
                     xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
 
-                    rel_err         = np.abs(xi_emul / xi_data - 1)
+                    rel_err         = np.abs(10**xi_emul / 10**xi_data - 1)
 
-                    if not xi_ratio:
-                        xi_data = xi_data * xi_fiducial
-                        xi_emul = xi_emul * xi_fiducial
 
-                    ax0.plot(r_common, xi_data, linewidth=0, marker='o', markersize=1, alpha=1)
-                    ax0.plot(r_common, xi_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
-                    ax1.plot(r_common, rel_err, color="gray", linewidth=0.7, alpha=0.5)
+                    ax0.plot(r_data, 10**xi_data, linewidth=0, marker='o', markersize=1, alpha=1)
+                    ax0.plot(r_data, 10**xi_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
+                    ax1.plot(r_data, rel_err, color="gray", linewidth=0.7, alpha=0.5)
 
 
             for i in range(1, 4):
                 ax1.plot(
-                    r_common,
-                    np.ones_like(r_common) * 10**(-i),
+                    r_data,
+                    np.ones_like(r_data) * 10**(-i),
                     linewidth=0.8,
                     linestyle="--",
                     color='gray',
@@ -582,15 +570,10 @@ class emulator_test:
                 ax0.set_ylim([1e-3, 1e4])
             ax1.set_ylim([1e-4, 1e0])
 
-            if xi_ratio:
-                ylabel =  r"$\xi_{gg}(r)/\xi_{gg}(r, \mathcal{C}_\mathrm{fid}, \mathcal{G}_\mathrm{fid})$"
-            else:
-                ylabel =  r"$\xi_{gg}(r)$"
-
+            ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
             ax1.set_xlabel(r'$\displaystyle  r/  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
             ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
 
-            ax0.set_ylabel(ylabel,fontsize=22)
 
             ax0.xaxis.set_ticklabels([])
             ax0.set_xscale("log")
@@ -608,7 +591,7 @@ class emulator_test:
 
             if not SAVEFIG:
                 if masked_r:
-                    ax0.plot(r_common, np.ones_like(r_common), lw=0)
+                    ax0.plot(r_data, np.ones_like(r_data), lw=0)
                 plt.show()
             
             else:
@@ -623,11 +606,7 @@ class emulator_test:
             
                 figdir.mkdir(parents=True, exist_ok=True)
                 
-                figtitle = f'version{vv}'
-                if xi_ratio:
-                    figtitle += "_xi_ratio"
-                else:
-                    figtitle += "_xi"
+                figtitle = f'version{vv}_xi'
                 if masked_r:
                     figtitle += f"_r_max{max_r_error:.0f}"
 
@@ -657,34 +636,23 @@ class emulator_test:
         fff.close()
 
 # param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
-# test = emulator_test(
-#     root_dir="./tpcf_data",
-#     dataset="xi_over_xi_fiducial",
-#     emul_dir="time_test",
-#     flag="val",
-#     print_config_param=param_list,
-# )
-
 hidden_dims_test = emulator_test(
-    root_dir="./tpcf_data",
-    dataset="xi_over_xi_fiducial",
+    root_dir="./tpcf_data/vary_r",
+    dataset="log10_xi",
     emul_dir="hidden_dims_test",
     flag="val",
     print_config_param="hidden_dims",
 )
 
-# test.plot_tpcf(range(0,3))
-# test.save_tpcf_errors([0])
+# SAVEERRORS = True 
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
 # SAVEFIG = True
-# hidden_dims_test.plot_tpcf([3], nodes_per_simulation=1)
-# print(SAVEFIG)
-hidden_dims_test.plot_tpcf([3], masked_r=False, nodes_per_simulation=2)
-hidden_dims_test.plot_tpcf([3], masked_r=True, nodes_per_simulation=2)
-
-# hidden_dims_test.plot_proj_corrfunc([3], masked_r=False)
-# hidden_dims_test.plot_proj_corrfunc([3], masked_r=True)
+# hidden_dims_test.plot_tpcf([4], masked_r=False, nodes_per_simulation=2)
+hidden_dims_test.plot_tpcf([4], masked_r=True, nodes_per_simulation=2)
+# SAVEFIG = True
+# hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
+# hidden_dims_test.plot_proj_corrfunc([4], masked_r=True)
 
 
 # SAVEFIG = True
