@@ -4,7 +4,7 @@
 
 continue_train_NN.py
 events.out.*
-config.yaml 
+config.yaml
 
 ### C++ ###
 # Prerequisites
