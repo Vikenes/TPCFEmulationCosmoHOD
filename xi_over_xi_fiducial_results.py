@@ -79,7 +79,9 @@ class emulator_test:
         self.flag           = flag # data set to be plotted 
         self.N_versions     = len(sorted(self.emul_dir.glob("version_*"))) # number of versions of the emulator
         version_dirs        = [f"{self.emul_dir}/version_{i}" for i in range(self.N_versions)]
-        self.config         = yaml.safe_load(open("config.yaml", "r"))
+        
+        
+        self.config         = yaml.safe_load(open(self.emul_dir/ "version_0/config.yaml", "r"))
         data_config         = DataConfig(**self.config["data"])
        
         self.param_names    = data_config.feature_columns[0:13]  # parameter names in feature columns
@@ -587,7 +589,7 @@ class emulator_test:
             else:
                 ylabel =  r"$\xi_{gg}(r)$"
 
-            ax1.set_xlabel(r'$\displaystyle  r/  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+            ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
             ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
 
             ax0.set_ylabel(ylabel,fontsize=22)
@@ -656,14 +658,14 @@ class emulator_test:
 
         fff.close()
 
-# param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
-# test = emulator_test(
-#     root_dir="./tpcf_data",
-#     dataset="xi_over_xi_fiducial",
-#     emul_dir="time_test",
-#     flag="val",
-#     print_config_param=param_list,
-# )
+param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
+test = emulator_test(
+    root_dir="./tpcf_data",
+    dataset="xi_over_xi_fiducial",
+    emul_dir="time_test",
+    flag="val",
+    print_config_param=param_list,
+)
 
 hidden_dims_test = emulator_test(
     root_dir="./tpcf_data",
@@ -680,6 +682,7 @@ hidden_dims_test = emulator_test(
 # SAVEFIG = True
 # hidden_dims_test.plot_tpcf([3], nodes_per_simulation=1)
 # print(SAVEFIG)
+SAVEFIG = True 
 hidden_dims_test.plot_tpcf([3], masked_r=False, nodes_per_simulation=2)
 hidden_dims_test.plot_tpcf([3], masked_r=True, nodes_per_simulation=2)
 
