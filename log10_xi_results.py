@@ -466,7 +466,7 @@ class emulator_test:
             
                 figdir.mkdir(parents=True, exist_ok=True)
                 
-                figtitle = f"version{vv}_xi"
+                figtitle = f"version{vv}_wp"
                 if masked_r:
                     figtitle += f"_r_max{max_r_error:.0f}"
                 if PRESENTATION:
@@ -550,6 +550,7 @@ class emulator_test:
                             ))
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+                    # print(self.emul_dir)
                     xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
 
                     rel_err         = np.abs(10**xi_emul / 10**xi_data - 1)
@@ -649,14 +650,25 @@ hidden_dims_test = emulator_test(
     print_config_param="hidden_dims",
 )
 
+test = emulator_test(
+    root_dir="./tpcf_data/vary_r",
+    dataset="log10_xi",
+    emul_dir="hidden_dims_test",
+    flag="val",
+    print_config_param="hidden_dims",
+)
+
 # SAVEERRORS = True 
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
-SAVEFIG = True
-hidden_dims_test.plot_tpcf([4], masked_r=False, nodes_per_simulation=2)
-hidden_dims_test.plot_tpcf([4], masked_r=True, nodes_per_simulation=2)
 # SAVEFIG = True
-hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
+# TRANSFORM = True 
+hidden_dims_test.plot_tpcf([0], masked_r=False, nodes_per_simulation=2)
+hidden_dims_test.plot_tpcf([1], masked_r=False, nodes_per_simulation=2)
+
+# hidden_dims_test.plot_tpcf([4], masked_r=True, nodes_per_simulation=2)
+# SAVEFIG = True
+# hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
 # hidden_dims_test.plot_proj_corrfunc([4], masked_r=True)
 
 

@@ -465,11 +465,8 @@ class emulator_test:
             
                 figdir.mkdir(parents=True, exist_ok=True)
                 
-                figtitle = f'version{vv}'
-                if xi_ratio:
-                    figtitle += "_xi_ratio"
-                else:
-                    figtitle += "_xi"
+                figtitle = f'version{vv}_wp'
+
                 if masked_r:
                     figtitle += f"_r_max{max_r_error:.0f}"
                 if PRESENTATION:
