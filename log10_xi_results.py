@@ -78,8 +78,13 @@ class emulator_test:
         
         self.flag           = flag # data set to be plotted 
         self.N_versions     = len(sorted(self.emul_dir.glob("version_*"))) # number of versions of the emulator
-        version_dirs        = [f"{self.emul_dir}/version_{i}" for i in range(self.N_versions)]
-        self.config         = yaml.safe_load(open("config.yaml", "r"))
+        """
+        Get the name of all features and labels from the config file.
+        For each emulator version, they are identical, so we get it from version_0.
+        This config file should not be used for anything else!
+        Elsewhere, the config file for each version should be used. 
+        """
+        self.config         = yaml.safe_load(open(self.emul_dir/ "version_0/config.yaml", "r"))
         data_config         = DataConfig(**self.config["data"])
        
         self.param_names    = data_config.feature_columns[0:13]  # parameter names in feature columns
