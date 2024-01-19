@@ -1,18 +1,18 @@
 data:
     feature_columns: ['wb', 'wc', 'sigma8', 'ns', 'alpha_s', 'N_eff', 'w0', 'wa',
                         'sigma_logM', 'alpha', 'kappa', 'log10M1', 'log10Mmin', 'r']
-    label_columns:   ['xi_over_xi_fiducial',]
-    batch_size:      1240
+    label_columns:   ['log10xi',]
+    batch_size:      1240 #62 points per TPCF -> 1240/62 = 20 TPCFs per batch
     num_workers:     32
     shuffle:         true
-    train_data_path: "./tpcf_data/xi_over_xi_fiducial/TPCF_train_ng_fixed.csv"
-    val_data_path:   "./tpcf_data/xi_over_xi_fiducial/TPCF_val_ng_fixed.csv"
-    test_data_path : "./tpcf_data/xi_over_xi_fiducial/TPCF_test_ng_fixed.csv"
+    train_data_path: "./tpcf_data/vary_r/log10_xi/TPCF_train_ng_fixed.csv"
+    val_data_path:   "./tpcf_data/vary_r/log10_xi/TPCF_val_ng_fixed.csv"
+    test_data_path : "./tpcf_data/vary_r/log10_xi/TPCF_test_ng_fixed.csv"
     feature_scaler:  "StandardScaler"
     label_scaler:    "StandardScaler"
 
 model:
-    hidden_dims:        [512] #,512,512]
+    hidden_dims:        [1024,512,512]
     activation:         "gelu"
     loss:               "L1Loss"
     dropout:            0.0
@@ -25,12 +25,12 @@ model:
  
 training:
     gpus:               [0]
-    max_epochs:         5
+    max_epochs:         500
     stopping_patience:  100
     use_swa:            false
     swa_start:          50
     gamma:              0.97
     gradient_clip_val:  0.0
-    default_root_dir:   "./tpcf_data/xi_over_xi_fiducial/emulators"
-    log_save_dir:       "patience_store_param"
+    default_root_dir:   "./tpcf_data/vary_r/log10_xi/emulators"
+    log_save_dir:       "hidden_dims_test"
 
