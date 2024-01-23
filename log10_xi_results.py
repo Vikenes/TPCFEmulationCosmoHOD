@@ -501,6 +501,7 @@ class emulator_test:
             nodes_per_simulation:   int     = 1,
             masked_r:               bool    = True,
             legend:                 bool    = False,
+            r_power:                float   = 0.0,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -511,8 +512,6 @@ class emulator_test:
         np.random.seed(42)
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-        # fff_key0 = fff.keys().__iter__().__next__()
-        # r_len = len(fff[fff_key0]["node0"]["r"][:])
 
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
@@ -538,6 +537,8 @@ class emulator_test:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
 
                     r_data  = fff_cosmo_HOD[self.r_key][...]
+                    print(f"{r_data.shape=}")
+                    exit()
                     r_mask = r_data < max_r_error if masked_r else np.ones_like(r_data, dtype=bool)
 
                     r_data  = r_data[r_mask]
@@ -551,16 +552,31 @@ class emulator_test:
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
                     # print(self.emul_dir)
-                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
+                    # xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
+                    
+                    xi_emul         = _emulator(params_batch, transform_=False)
+                    xi_emul2         = _emulator(params_batch, transform_=True)
+                    # print(xi_emul)
+                    # print()
+                    # print(xi_emul2)
+                    exit()
 
                     rel_err         = np.abs(10**xi_emul / 10**xi_data - 1)
 
+                    y_data = 10**xi_data * r_data**r_power
+                    y_emul = 10**xi_emul * r_data**r_power
+                    y_emul2 = 10**xi_emul2 * r_data**r_power
 
-                    ax0.plot(r_data, 10**xi_data, linewidth=0, marker='o', markersize=1, alpha=1)
-                    ax0.plot(r_data, 10**xi_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
+
+                    # ax0.plot(r_data, y_data, linewidth=0, marker='o', markersize=1, alpha=1)
+                    # ax0.plot(r_data, y_emul2, linewidth=0, marker='o', markersize=1, alpha=1)
+                    ax0.plot(r_data, y_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
+
+                    # ax0.plot(r_data, y_emul2, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
+
                     ax1.plot(r_data, rel_err, color="gray", linewidth=0.7, alpha=0.5)
 
-
+            
             for i in range(1, 4):
                 ax1.plot(
                     r_data,
@@ -570,13 +586,26 @@ class emulator_test:
                     color='gray',
                     zorder=100,
                 )
-            if masked_r:
-                ax0.set_ylim([1e-2, 1e4])
-            else:
-                ax0.set_ylim([1e-3, 1e4])
+            plt.show()
+            if r_power <= 1:
+                if masked_r:
+                    ax0.set_ylim([1e-2, 1e4])
+                else:
+                    ax0.set_ylim([1e-3, 1e4])
+            elif r_power==1.5:
+                ax0.set_ylim([3e0, 2.5e3])
+            elif r_power==2:
+                ax0.set_ylim([1e1, 3e3])
+
             ax1.set_ylim([1e-4, 1e0])
 
-            ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
+            if r_power == 0:
+                ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
+            elif r_power == 1:
+                ax0.set_ylabel(r"$r \xi_{gg}(r)$",fontsize=22)
+
+            else:
+                ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
             ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
             ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
 
@@ -642,31 +671,50 @@ class emulator_test:
         fff.close()
 
 # param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
-hidden_dims_test = emulator_test(
+S = emulator_test(
     root_dir="./tpcf_data/vary_r",
     dataset="log10_xi",
-    emul_dir="hidden_dims_test",
+    emul_dir="scaling_test",
     flag="val",
-    print_config_param="hidden_dims",
+    print_config_param="apply_scaling",
 )
 
-test = emulator_test(
+S2 = emulator_test(
     root_dir="./tpcf_data/vary_r",
     dataset="log10_xi",
-    emul_dir="hidden_dims_test",
-    flag="val",
-    print_config_param="hidden_dims",
+    emul_dir="scaling_test",
+    flag="test",
+    print_config_param="apply_scaling",
 )
 
+"""
+seed_everything: Gives equal results for each run of the emulator
+No need to set deterministic=True in the config file
+"""
+
+# seed_test.save_tpcf_errors(r_error_mask=False)
 # SAVEERRORS = True 
 # hidden_dims_test.save_tpcf_errors()
 # hidden_dims_test.print_tpcf_errors([3])
 # SAVEFIG = True
 # TRANSFORM = True 
-hidden_dims_test.plot_tpcf([0], masked_r=False, nodes_per_simulation=2)
-hidden_dims_test.plot_tpcf([1], masked_r=False, nodes_per_simulation=2)
+# seed_test.save_tpcf_errors()
+# seed_test.print_tpcf_errors([5,6,7])
+# H.plot_tpcf([6], masked_r=True, nodes_per_simulation=1, r_power=1)
+# H.plot_tpcf([6], masked_r=False, nodes_per_simulation=1, r_power=1.5)
+# S.save_tpcf_errors()
+# S.print_tpcf_errors()
+# S.plot_tpcf([0,1], masked_r=False, nodes_per_simulation=1, r_power=2)
+# S2.plot_tpcf([1], masked_r=False, nodes_per_simulation=1, r_power=2)
+# TRANSFORM = True
+# S.plot_tpcf([0], masked_r=False, nodes_per_simulation=1, r_power=2)
+S.plot_tpcf([1], masked_r=False, nodes_per_simulation=1, r_power=2)
+# S2.plot_tpcf([1], masked_r=False, nodes_per_simulation=1, r_power=2)
 
-# hidden_dims_test.plot_tpcf([4], masked_r=True, nodes_per_simulation=2)
+
+
+# hidden_dims_test.plot_tpcf([1], masked_r=False, nodes_per_simulation=2)
+
 # SAVEFIG = True
 # hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
 # hidden_dims_test.plot_proj_corrfunc([4], masked_r=True)

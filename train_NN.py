@@ -6,7 +6,8 @@ import yaml
 import os 
 
 import torch.nn as nn
-
+from lightning.pytorch import seed_everything
+seed_everything(42, workers=True)
 import pytorch_lightning as pl
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from pytorch_lightning.callbacks import StochasticWeightAveraging
@@ -56,6 +57,10 @@ data_module.setup(
     test_data_path  = Path(data_config.test_data_path),
     autoencoder     = model_config.autoencoder,
 )
+
+if data_config.apply_scaling:
+    data_module.transform_datasets()
+
 model = getattr(_models, model_config.type)(
     n_features=data_module.train_data.x.shape[-1],
     output_dim=data_module.train_data.y.shape[-1],
