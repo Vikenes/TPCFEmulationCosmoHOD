@@ -6,8 +6,8 @@ import h5py
 import os 
 import yaml 
 from typing import List, Optional, Union
+from collections.abc import Iterable
 import time 
-import typing 
 import sys 
 sys.path.append("../emul_utils")
 from _nn_config import DataConfig, TrainingConfig, ModelConfig
@@ -108,20 +108,39 @@ class emulator_test:
         Prints the config parameter values for an emulator version
         corresponding to the keys in self.print_config_param
         """
-        vv_config           = yaml.safe_load(open(f"{self.emul_dir}/version_{version}/config.yaml", "r"))
-        vv_config_flattened = pd.json_normalize(vv_config).to_dict(orient="records")[0]
-        vv_config_all       = {k.split(".")[1]:v for k,v in vv_config_flattened.items()}
-        vv_config_output = {k:v for k,v in vv_config_all.items() if k in self.print_config_param}
+        
+        # Helper function to handle individual versions
+        def _print_config_single_version(ver):
+            vv_config = yaml.safe_load(open(f"{self.emul_dir}/version_{ver}/config.yaml", "r"))
+            vv_config_flattened = pd.json_normalize(vv_config).to_dict(orient="records")[0]
+            vv_config_all = {k.split(".")[1]: v for k, v in vv_config_flattened.items()}
+            vv_config_output = {k: v for k, v in vv_config_all.items() if k in self.print_config_param}
+            return vv_config_output
+        
+        if isinstance(version, Iterable) and not isinstance(version, str):
+            versions = version 
 
-
-        if self.print_config_param is not None:
+        else:
             if save:
+                # If save=True, we're outputting the config parameters to a file
+                # Together with the errors, so we're only saving one version at a time
+                vv_config_output = _print_config_single_version(version)
                 return vv_config_output
-            else:
-                
-                for k,v in vv_config_output.items():
-                    print(" - ", end="")
-                    print(f"{k}={v}")
+            
+            # Make version iterable 
+            versions = [version]
+
+        for ver in versions:
+            vv_config_output = _print_config_single_version(ver)
+            print(f"Version {ver}:")
+            for k, v in vv_config_output.items():
+                print(" - ", end="")
+                print(f"{k}={v}")
+
+        return None 
+            
+
+
 
 
     def save_tpcf_errors(
@@ -134,17 +153,6 @@ class emulator_test:
         
         flag = self.flag 
         
-        # r_common    = self.r_common
-        # if r_error_mask:
-        #     if min_r_error is not None:
-        #         r_error_mask = (r_common < max_r_error) & (r_common > min_r_error)
-        #     else:
-        #         r_error_mask = r_common < max_r_error
-        # else:
-        #     r_error_mask = np.ones_like(r_common, dtype=bool)
-        # r_common     = r_common[r_error_mask]
-        # r_len        = len(r_common)
-
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
         else:
@@ -502,6 +510,8 @@ class emulator_test:
             masked_r:               bool    = True,
             legend:                 bool    = False,
             r_power:                float   = 0.0,
+            setaxinfo:              bool    = True,
+            plot_title:                  str     = None,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -537,8 +547,6 @@ class emulator_test:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
 
                     r_data  = fff_cosmo_HOD[self.r_key][...]
-                    print(f"{r_data.shape=}")
-                    exit()
                     r_mask = r_data < max_r_error if masked_r else np.ones_like(r_data, dtype=bool)
 
                     r_data  = r_data[r_mask]
@@ -551,31 +559,18 @@ class emulator_test:
                             ))
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-                    # print(self.emul_dir)
-                    # xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
+                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
                     
-                    xi_emul         = _emulator(params_batch, transform_=False)
-                    xi_emul2         = _emulator(params_batch, transform_=True)
-                    # print(xi_emul)
-                    # print()
-                    # print(xi_emul2)
-                    exit()
-
                     rel_err         = np.abs(10**xi_emul / 10**xi_data - 1)
 
                     y_data = 10**xi_data * r_data**r_power
                     y_emul = 10**xi_emul * r_data**r_power
-                    y_emul2 = 10**xi_emul2 * r_data**r_power
 
 
-                    # ax0.plot(r_data, y_data, linewidth=0, marker='o', markersize=1, alpha=1)
-                    # ax0.plot(r_data, y_emul2, linewidth=0, marker='o', markersize=1, alpha=1)
+                    ax0.plot(r_data, y_data, linewidth=0, marker='o', markersize=1, alpha=1)
                     ax0.plot(r_data, y_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
-
-                    # ax0.plot(r_data, y_emul2, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
-
                     ax1.plot(r_data, rel_err, color="gray", linewidth=0.7, alpha=0.5)
-
+                
             
             for i in range(1, 4):
                 ax1.plot(
@@ -586,142 +581,122 @@ class emulator_test:
                     color='gray',
                     zorder=100,
                 )
-            plt.show()
-            if r_power <= 1:
-                if masked_r:
-                    ax0.set_ylim([1e-2, 1e4])
-                else:
-                    ax0.set_ylim([1e-3, 1e4])
-            elif r_power==1.5:
-                ax0.set_ylim([3e0, 2.5e3])
-            elif r_power==2:
-                ax0.set_ylim([1e1, 3e3])
 
-            ax1.set_ylim([1e-4, 1e0])
+            if not setaxinfo:
+                ax0.set_xscale("log")
+                ax0.set_yscale("log")
 
-            if r_power == 0:
-                ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
-            elif r_power == 1:
-                ax0.set_ylabel(r"$r \xi_{gg}(r)$",fontsize=22)
+                ax1.set_xscale("log")
+                ax1.set_yscale("log")
 
-            else:
-                ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
-            ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
-            ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
-
-
-            ax0.xaxis.set_ticklabels([])
-            ax0.set_xscale("log")
-            ax0.set_yscale("log")
-            ax1.set_yscale("log")
-            ax1.set_xscale("log")
-            plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
-            plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for each of the {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
-            ax0.set_title(plot_title)
-
-            ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
-            ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
-            if legend:
-                ax0.legend(loc="upper right", fontsize=12)
-
-            if not SAVEFIG:
-                if masked_r:
-                    ax0.plot(r_data, np.ones_like(r_data), lw=0)
                 plt.show()
             
-            else:
-            
+            else:        
+                if r_power <= 1:
+                    if masked_r:
+                        ax0.set_ylim([1e-2, 1e4])
+                    else:
+                        ax0.set_ylim([1e-3, 1e4])
+                elif r_power==1.5:
+                    ax0.set_ylim([3e0, 2.5e3])
+                elif r_power==2:
+                    ax0.set_ylim([1e1, 3e3])
 
-                if PRESENTATION:
-                    fig_dir_list = list(self.fig_dir.parts)
-                    fig_dir_list.insert(1, "presentation")
-                    figdir = Path("").joinpath(*fig_dir_list)
+                ax1.set_ylim([1e-4, 1e0])
+
+                if r_power == 0:
+                    ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
+                elif r_power == 1:
+                    ax0.set_ylabel(r"$r \xi_{gg}(r)$",fontsize=22)
+
                 else:
-                    figdir = self.fig_dir
-            
-                figdir.mkdir(parents=True, exist_ok=True)
+                    ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
+                ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+                ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
+
+
+                ax0.xaxis.set_ticklabels([])
+                ax0.set_xscale("log")
+                ax0.set_yscale("log")
+                ax1.set_yscale("log")
+                ax1.set_xscale("log")
+                if plot_title is None:
+                    plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
+                    plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for each of the {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
+                ax0.set_title(plot_title)
+
+                ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
+                ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
+                if legend:
+                    ax0.legend(loc="upper right", fontsize=12)
+
+                if not SAVEFIG:
+                    if masked_r:
+                        ax0.plot(r_data, np.ones_like(r_data), lw=0)
+                    plt.show()
                 
-                figtitle = f'version{vv}_xi'
-                if masked_r:
-                    figtitle += f"_r_max{max_r_error:.0f}"
+                else:
+                
 
-                figtitle += f"_{nodes_per_simulation}nodes"
+                    if PRESENTATION:
+                        fig_dir_list = list(self.fig_dir.parts)
+                        fig_dir_list.insert(1, "presentation")
+                        figdir = Path("").joinpath(*fig_dir_list)
+                    else:
+                        figdir = self.fig_dir
+                
+                    figdir.mkdir(parents=True, exist_ok=True)
+                    
+                    figtitle = f'version{vv}_xi'
+                    if masked_r:
+                        figtitle += f"_r_max{max_r_error:.0f}"
 
-                if PRESENTATION:
-                    week_number = datetime.now().strftime("%U")
-                    figtitle = f"week{int(week_number)}_{figtitle}"
+                    figtitle += f"_{nodes_per_simulation}nodes"
+
+                    if PRESENTATION:
+                        week_number = datetime.now().strftime("%U")
+                        figtitle = f"week{int(week_number)}_{figtitle}"
 
 
-                figtitle += ".png"
-                figname = Path(figdir / figtitle)
+                    figtitle += ".png"
+                    figname = Path(figdir / figtitle)
 
-                plt.savefig(
-                    figname,
-                    dpi=200 if figtitle.endswith(".png") else None,
-                    bbox_inches="tight",
-                    pad_inches=0.05,        
-                )
-                print(f'save plot to {figname}')
-                plt.close(fig)
-                if PUSH:
-                    os.system(f'git add {figname}')
-                    os.system(f'git commit -m "add plot {figname}"')
-                    os.system('git push')
+                    plt.savefig(
+                        figname,
+                        dpi=200 if figtitle.endswith(".png") else None,
+                        bbox_inches="tight",
+                        pad_inches=0.05,        
+                    )
+                    print(f'save plot to {figname}')
+                    plt.close(fig)
+                    if PUSH:
+                        os.system(f'git add {figname}')
+                        os.system(f'git commit -m "add plot {figname}"')
+                        os.system('git push')
 
         fff.close()
 
-# param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
-S = emulator_test(
+
+
+H = emulator_test(
     root_dir="./tpcf_data/vary_r",
     dataset="log10_xi",
-    emul_dir="scaling_test",
+    emul_dir="compare_scaling",
     flag="val",
     print_config_param="apply_scaling",
 )
 
-S2 = emulator_test(
-    root_dir="./tpcf_data/vary_r",
-    dataset="log10_xi",
-    emul_dir="scaling_test",
-    flag="test",
-    print_config_param="apply_scaling",
-)
-
-"""
-seed_everything: Gives equal results for each run of the emulator
-No need to set deterministic=True in the config file
-"""
-
-# seed_test.save_tpcf_errors(r_error_mask=False)
 # SAVEERRORS = True 
-# hidden_dims_test.save_tpcf_errors()
-# hidden_dims_test.print_tpcf_errors([3])
-# SAVEFIG = True
 # TRANSFORM = True 
-# seed_test.save_tpcf_errors()
-# seed_test.print_tpcf_errors([5,6,7])
-# H.plot_tpcf([6], masked_r=True, nodes_per_simulation=1, r_power=1)
-# H.plot_tpcf([6], masked_r=False, nodes_per_simulation=1, r_power=1.5)
-# S.save_tpcf_errors()
-# S.print_tpcf_errors()
-# S.plot_tpcf([0,1], masked_r=False, nodes_per_simulation=1, r_power=2)
-# S2.plot_tpcf([1], masked_r=False, nodes_per_simulation=1, r_power=2)
-# TRANSFORM = True
-# S.plot_tpcf([0], masked_r=False, nodes_per_simulation=1, r_power=2)
-S.plot_tpcf([1], masked_r=False, nodes_per_simulation=1, r_power=2)
-# S2.plot_tpcf([1], masked_r=False, nodes_per_simulation=1, r_power=2)
-
-
-
-# hidden_dims_test.plot_tpcf([1], masked_r=False, nodes_per_simulation=2)
-
-# SAVEFIG = True
-# hidden_dims_test.plot_proj_corrfunc([4], masked_r=False)
-# hidden_dims_test.plot_proj_corrfunc([4], masked_r=True)
-
-
 # SAVEFIG = True
 # PRESENTATION = True
-# test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=False, xi_ratio=True)
-# test.plot_tpcf(plot_versions=[7], nodes_per_simulation=3, masked_r=True, xi_ratio=False)
+
+# H.save_tpcf_errors()
+# H.print_tpcf_errors()
+# H.plot_tpcf(plot_versions=[0], masked_r=False, nodes_per_simulation=1, r_power=2,
+            # plot_title="No scaling")
+# H.plot_tpcf(plot_versions=[1], masked_r=False, nodes_per_simulation=1, r_power=2,
+            # plot_title="Stan'dard normal scaling on inputs and outputs")
+
+
 

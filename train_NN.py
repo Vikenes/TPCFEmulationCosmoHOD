@@ -56,17 +56,14 @@ data_module.setup(
     val_data_path   = Path(data_config.val_data_path),
     test_data_path  = Path(data_config.test_data_path),
     autoencoder     = model_config.autoencoder,
+    apply_scaling   = data_config.apply_scaling,
 )
-
-if data_config.apply_scaling:
-    data_module.transform_datasets()
 
 model = getattr(_models, model_config.type)(
     n_features=data_module.train_data.x.shape[-1],
     output_dim=data_module.train_data.y.shape[-1],
     **dict(model_config),
     )
-
 # Change weight init
 def init_weights_small_variance(m,):
     if type(m) == nn.Linear:
@@ -114,10 +111,8 @@ trainer = pl.Trainer(
     gradient_clip_val   = train_config.gradient_clip_val if train_config.gradient_clip_val != 0.0 else None,
     logger              = logger_,
     log_every_n_steps   = 5,
-    # check_val_every_n_epoch=10,
     )
 
-# Store dictionary with scalers
 scalers_path = Path(trainer.logger.log_dir)
 scalers_path.mkdir(parents=True, exist_ok=True)
 data_module.dump_scalers(path=scalers_path / "scalers.pkl")
@@ -132,7 +127,9 @@ print("Starting training")
 t0 = time.time()
 
 # Perform training 
-trainer.fit(model=model, datamodule=data_module)
+trainer.fit(model=model, 
+            datamodule=data_module,
+            )
 
     
 dur = time.time() - t0
