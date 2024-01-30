@@ -28,13 +28,11 @@ warnings.filterwarnings("ignore", category=UserWarning, message="Input line")
 global SAVEFIG 
 global PUSH
 global SAVEERRORS
-global TRANSFORM
 global PRESENTATION
 
 SAVEFIG         = False
 PUSH            = False
 SAVEERRORS      = False
-TRANSFORM       = False
 PRESENTATION    = False
 
 dataset_names = {"train": "Training", "val": "Validation", "test": "Test"}
@@ -51,10 +49,9 @@ class cm_emulator_class:
         self,
         params,
         return_tensors: bool = False,
-        transform_: bool = False,
     ):
         inputs = np.array(params)
-        return self.predictor(inputs, transform=transform_).reshape(-1)
+        return self.predictor(inputs).reshape(-1)
 
 
 class emulator_test:
@@ -188,7 +185,7 @@ class emulator_test:
                     _emulator       = cm_emulator_class(version=vv, LIGHTING_LOGS_PATH=self.emul_dir)
                     
                     xi_data         = 10**fff_cosmo_HOD[self.xi_key][...][r_mask]
-                    xi_emul         = 10**_emulator(params_batch, transform_=TRANSFORM)
+                    xi_emul         = 10**_emulator(params_batch)
 
                     rel_err         = np.abs(xi_emul / xi_data - 1)
                     _err_lst_cosmo.append(rel_err)
@@ -435,7 +432,7 @@ class emulator_test:
                             ))
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-                    xi_emul         = 10**_emulator(params_batch, transform_=TRANSFORM) 
+                    xi_emul         = 10**_emulator(params_batch) 
                     rp_data, wp_data = self.compute_wp(xi_data, r_data, r_perp_min=0.5)
                     rp_emul, wp_emul = self.compute_wp(xi_emul, r_data, r_perp_min=0.5)
 
@@ -559,7 +556,7 @@ class emulator_test:
                             ))
 
                     _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-                    xi_emul         = _emulator(params_batch, transform_=TRANSFORM)
+                    xi_emul         = _emulator(params_batch)
                     
                     rel_err         = np.abs(10**xi_emul / 10**xi_data - 1)
 
@@ -678,25 +675,17 @@ class emulator_test:
 
 
 
-H = emulator_test(
+S = emulator_test(
     root_dir="./tpcf_data/vary_r",
     dataset="log10_xi",
     emul_dir="compare_scaling",
     flag="val",
     print_config_param="apply_scaling",
 )
-
 # SAVEERRORS = True 
-# TRANSFORM = True 
 # SAVEFIG = True
 # PRESENTATION = True
 
-# H.save_tpcf_errors()
-# H.print_tpcf_errors()
-# H.plot_tpcf(plot_versions=[0], masked_r=False, nodes_per_simulation=1, r_power=2,
-            # plot_title="No scaling")
-# H.plot_tpcf(plot_versions=[1], masked_r=False, nodes_per_simulation=1, r_power=2,
-            # plot_title="Stan'dard normal scaling on inputs and outputs")
 
 
 
