@@ -56,7 +56,6 @@ data_module.setup(
     val_data_path   = Path(data_config.val_data_path),
     test_data_path  = Path(data_config.test_data_path),
     autoencoder     = model_config.autoencoder,
-    apply_scaling   = data_config.apply_scaling,
 )
 
 model = getattr(_models, model_config.type)(
