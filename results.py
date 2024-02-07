@@ -260,6 +260,7 @@ class emulator_test:
             self, 
             plot_versions:          Union[List[int], range, str] = "all",
             print_individual:       bool = False,
+            errors_only:            bool = False,
             ):
         
         flag = self.flag 
@@ -298,15 +299,14 @@ class emulator_test:
                     print(f"{sim_errors[i,1]:11.4f}", end=" | ")
                     print(f"{sim_errors[i,2]:11.4f}")
             training_dur = np.loadtxt(f"{version_path}/training_duration.txt", dtype=str, delimiter="_")
-            print()
             print(f"TOTAL ERRORS:")
             print(f" - MEAN:   {tot_errors[0]:.4f}")
             print(f" - MEDIAN: {tot_errors[1]:.4f}")
             print(f" - STD:    {tot_errors[2]:.4f}")
-            print("PARAMS:")
-            self.print_config_parameters(version=vv, verbose=False)
-            print(f"Training duration:")
-            print(f" - {training_dur}")
+            if not errors_only:
+                print("PARAMS:")
+                self.print_config_parameters(version=vv, verbose=False)
+                print(f"Training duration: - {training_dur}")
 
             # print()
             print(50*"=")
@@ -676,14 +676,6 @@ class emulator_test:
 
 
 
-H = emulator_test(
-    root_dir="./tpcf_data/vary_r",
-    dataset="log10_xi",
-    emul_dir="hidden_dims_test",
-    flag="val",
-    print_config_param=["hidden_dims"],
-)
-
 S = emulator_test(
     root_dir="./tpcf_data",
     dataset="vary_r",
@@ -691,10 +683,21 @@ S = emulator_test(
     flag="val",
     print_config_param=["feature_scaler", "label_scaler"],
 )
-# H.plot_tpcf(plot_versions=1)
-# S.plot_tpcf(plot_versions=1)
-# S.print_config_parameters()
+"""
+compare_scaling. versions worth looking further into:
+v1: id  | log10 , 98 min
+v3: id  | stdlog, 575 min 
+v4: std | log10 , 306 min 
+v6: std | stdlog, 174 min
+v7: std | id    , 166 min
+
+Bad:
+v0: id  | id, 861 min (bad)
+v2: id  | std, 127 min (worse)
+v5: std | std, 176 min (worst) 
+"""
+# S.plot_tpcf()
 # S.save_tpcf_errors()
-S.print_tpcf_errors()
+# S.print_tpcf_errors()
 
 
