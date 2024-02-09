@@ -25,6 +25,18 @@ from scipy.integrate import simpson
 import warnings 
 warnings.filterwarnings("ignore", category=UserWarning, message="Input line")
 
+"""
+
+WARNING!!!
+
+Fix proj_corrfunc! 
+There are factors of 10**xi hiding 
+
+
+
+
+"""
+
 global SAVEFIG 
 global PUSH
 global PRESENTATION
