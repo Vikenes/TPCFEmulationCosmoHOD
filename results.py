@@ -180,6 +180,10 @@ class emulator_test:
 
             t0_vv = time.time()
 
+            # Load emulator for this version
+            _emulator       = cm_emulator_class(version=vv, LIGHTING_LOGS_PATH=self.emul_dir)
+
+            # Lists to store errors for each cosmology
             _err_lst_version = []
             _sim_lst_version = []
             for simulation_key in self.simulation_keys:
@@ -202,7 +206,6 @@ class emulator_test:
                             [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
                             , r_data
                             ))
-                    _emulator       = cm_emulator_class(version=vv, LIGHTING_LOGS_PATH=self.emul_dir)
                     xi_data         = fff_cosmo_HOD[self.xi_key][...][r_mask]
                     xi_emul         = _emulator(params_batch)
 
@@ -418,6 +421,10 @@ class emulator_test:
             plt.rc('axes', prop_cycle=custom_cycler)
             ax.set_prop_cycle(custom_cycler)
 
+            # Load emulator for this version
+            _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+
+
             for simulation_key in self.simulation_keys:
                 
                 fff_cosmo = fff[simulation_key]
@@ -439,7 +446,6 @@ class emulator_test:
                             , r_data
                             ))
 
-                    _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
                     xi_emul         = 10**_emulator(params_batch) 
                     rp_data, wp_data = self.compute_wp(xi_data, r_data, r_perp_min=0.5)
                     rp_emul, wp_emul = self.compute_wp(xi_emul, r_data, r_perp_min=0.5)
@@ -544,6 +550,9 @@ class emulator_test:
             ax1 = plt.subplot(gs[1])
             ax0.set_prop_cycle(custom_cycler)
 
+            # Load emulator for this version
+            _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+
             for simulation_key in self.simulation_keys:
                 
                 fff_cosmo = fff[simulation_key]
@@ -565,7 +574,6 @@ class emulator_test:
                             , r_data
                             ))
 
-                    _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
                     xi_emul         = _emulator(params_batch)
                     
 
