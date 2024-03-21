@@ -59,7 +59,7 @@ class cm_emulator_class:
 
 class emulator_test:
     def __init__(self,
-                root_dir:  str = "./tpcf_data",
+                root_dir:  str = "./emulator_data",
                 dataset:   str = "xi_over_xi_fiducial",
                 emul_dir:  str = "time_test",
                 flag:      str = "val",
@@ -74,8 +74,6 @@ class emulator_test:
             # Check if the emulator logs directory exists
             raise FileNotFoundError(f"Path {self.emul_dir} does not exist.")
 
-        self.tpcf_data    = Path(self.data_dir / f"TPCF_{flag}_ng_fixed.csv") # name of data set
-        
         self.flag           = flag # data set to be plotted 
         self.N_versions     = len(sorted(self.emul_dir.glob("version_*"))) # number of versions of the emulator
         
@@ -661,7 +659,7 @@ class emulator_test:
 
 param_list = ["batch_size", "hidden_dims", "max_epochs", "patience"]
 test = emulator_test(
-    root_dir="./tpcf_data",
+    root_dir="./emulator_data",
     dataset="xi_over_xi_fiducial",
     emul_dir="time_test",
     flag="val",
@@ -669,7 +667,7 @@ test = emulator_test(
 )
 
 hidden_dims_test = emulator_test(
-    root_dir="./tpcf_data",
+    root_dir="./emulator_data",
     dataset="xi_over_xi_fiducial",
     emul_dir="hidden_dims_test",
     flag="val",
