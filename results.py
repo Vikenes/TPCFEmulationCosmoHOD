@@ -345,8 +345,6 @@ class emulator_test:
         with r = sqrt(r_perp^2 + r_para^2). 
         """
 
-        xi          = xi_data#[r_mask]
-
         if lin:
             r_perp_binedge  = np.linspace(r_perp_min, r_perp_max, N_perp)
         elif linlog:
@@ -412,6 +410,8 @@ class emulator_test:
 
         if type(plot_versions) == list or type(plot_versions) == range:
             version_list = plot_versions
+        elif type(plot_versions) == int:
+            version_list = [plot_versions]
         else:
             version_list = range(self.N_versions)
 
@@ -438,15 +438,23 @@ class emulator_test:
                     r_mask = r_data < max_r_error if masked_r else np.ones_like(r_data, dtype=bool)
                     r_data = r_data[r_mask]
 
-                    xi_data = 10**fff_cosmo_HOD[self.xi_key][...][r_mask] 
+                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask] 
+
+                    ppp = [fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]
+                    print(ppp)
+                    exit()
 
                     params_batch   = np.column_stack(
                         (np.vstack(
-                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
+                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data)
+                            )
                             , r_data
                             ))
+                    
+                    print(params_batch.shape)
+                    exit()
 
-                    xi_emul         = 10**_emulator(params_batch) 
+                    xi_emul         = _emulator(params_batch) 
                     rp_data, wp_data = self.compute_wp(xi_data, r_data, r_perp_min=0.5)
                     rp_emul, wp_emul = self.compute_wp(xi_emul, r_data, r_perp_min=0.5)
 
@@ -718,4 +726,4 @@ v5: std | std, 176 min (worst)
 # S.save_tpcf_errors()
 # S.print_tpcf_errors()
 
-
+S.plot_proj_corrfunc(plot_versions=6)
