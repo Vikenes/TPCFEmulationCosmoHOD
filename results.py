@@ -10,7 +10,7 @@ from collections.abc import Iterable
 import time 
 import sys 
 sys.path.append("../emul_utils")
-from _nn_config import DataConfig, TrainingConfig, ModelConfig
+from _nn_config import DataConfig #, TrainingConfig, ModelConfig
 from _predict import Predictor
 
 import matplotlib.pyplot as plt
@@ -54,30 +54,30 @@ class cm_emulator_class:
             version=0,
             ):
         self.predictor = Predictor.from_path(f"{LIGHTING_LOGS_PATH}/version_{version}")
+        self.config    = self.predictor.load_config(f"{LIGHTING_LOGS_PATH}/version_{version}")
 
     def __call__(
         self,
         params,
-        return_tensors: bool = False,
     ):
-        inputs = np.array(params)
-        return self.predictor(inputs).reshape(-1)
+        return self.predictor(np.array(params)).reshape(-1)
 
 
-class emulator_test:
+class TPCF_emulator:
     def __init__(self,
                 root_dir:  str = "./emulator_data",
-                dataset:   str = "vary_r",
-                emul_dir:  str = "compare_scaling",
+                dataset:   str = None,
+                emul_dir:  str = "first_test",
                 flag:      str = "val",
                 print_config_param:     List[str] = None,
                 ):
-        self.dataset    = dataset
-        self.data_dir   = Path(f"{root_dir}/{dataset}")
+        if dataset is None:
+            self.data_dir   = Path(f"{root_dir}")
+        else:
+            self.data_dir   = Path(f"{root_dir}/{dataset}")
         self.emul_dir   = Path(self.data_dir / "emulators" / emul_dir) # name of emulator logs directory
         self.fig_dir    = Path(f"./plots/{dataset}/{emul_dir}") # name of emulator plots directory 
         if not self.emul_dir.exists():
-            # Check if the emulator logs directory exists
             raise FileNotFoundError(f"Path {self.emul_dir} does not exist.")
 
         self.flag           = flag # data set to be plotted 
@@ -88,14 +88,18 @@ class emulator_test:
         This config file should not be used for anything else!
         Elsewhere, the config file for each version should be used. 
         """
-        self.config         = yaml.safe_load(open(self.emul_dir/ "version_0/config.yaml", "r"))
-        data_config         = DataConfig(**self.config["data"])
-       
-        self.param_names    = data_config.feature_columns[0:13]  # parameter names in feature columns
-        self.r_key          = data_config.feature_columns[13]    # r key in feature columns, in case r is scaled differently than other features. e.g. "r", "log10r"
-        self.xi_key         = data_config.label_columns[0]      # xi key in label columns
+        # self.config         = yaml.safe_load(open(self.emul_dir/ "version_0/config.yaml", "r"))
+        config_file         = Predictor.load_config(self.emul_dir / "version_0")
+        config_keys         = [subkey for key in config_file.keys() for subkey in config_file[key].keys()]
 
-        with h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r') as fff:
+        feature_columns    = config_file["data"]["feature_columns"]  # parameter names in feature columns
+        # Remove "r" from the parameter names
+        # self.param_names    = [param for param in param_names if param != "r"]
+        self.param_names = feature_columns.remove("r")
+        self.r_key          = "r"
+        self.xi_key         = "xi"      # xi key in label columns
+
+        with h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r') as fff:
             self.simulation_keys = [key for key in fff.keys() if key.startswith("AbacusSummit")]
             self.N_simulations   = len(self.simulation_keys)
 
@@ -103,6 +107,9 @@ class emulator_test:
         # Makes comparison of different versions easier by seeing which parameters correspond to which errors
         # For e.g. "learning_rate", "patience", the values of these parameters are printed during plotting for each version 
         self.config_param_names     = [print_config_param] if type(print_config_param) != list and print_config_param is not None else print_config_param
+        for k in self.config_param_names:
+            if k not in config_keys:
+                raise KeyError(f"Key {k} not found in config file.")
 
 
     def get_config_parameter(
@@ -122,7 +129,11 @@ class emulator_test:
 
             
 
-    def print_config_parameters(self, version=None, verbose=True):
+    def print_config_parameters(self, version=None, print_version_number=True):
+        """
+        Print relevant config parameters for each version
+        Simplifies comparison of different versions
+        """
         assert not isinstance(version, str), "Argument 'version' can not be a string"
 
         # Ensure version to be an iterable
@@ -137,7 +148,7 @@ class emulator_test:
 
         for ver in version_list:
             vv_config_output = self.get_config_parameter(ver)
-            if verbose:
+            if print_version_number:
                 # Don't want to print version number when we're printing errors
                 print()
                 print(f"Version {ver}:")
@@ -318,207 +329,13 @@ class emulator_test:
             print(f" - STD:    {tot_errors[2]:.4f}")
             if not errors_only:
                 print("PARAMS:")
-                self.print_config_parameters(version=vv, verbose=False)
+                self.print_config_parameters(version=vv, print_version_number=False)
                 print(f"Training duration: - {training_dur}")
 
             # print()
             print(50*"=")
             print()
 
-
-    def compute_wp(
-            self,
-            xi_data:        np.ndarray,
-            r_data:         np.ndarray,
-            r_perp_min:     float   = 0.5,
-            r_perp_max:     float   = 40.0,
-            N_perp:         int     = 40,
-            r_para_max:     float   = 100.0,
-            N_para:         int     = int(1e4),
-            lin:            bool    = False,
-            linlog:         bool    = False,
-
-    ):
-        """
-        Computes projected correlation function wp(r_perp) from xi(r)
-        given by w_p(r_perp) = 2 * int_0^r_para_max xi(r) dr_para
-        with r = sqrt(r_perp^2 + r_para^2). 
-        """
-
-        if lin:
-            r_perp_binedge  = np.linspace(r_perp_min, r_perp_max, N_perp)
-        elif linlog:
-            N_perp_frac = r_data[r_data < 5].shape[0] / r_data[r_data > 5].shape[0]
-            N_perp_log = int(N_perp * N_perp_frac)
-            N_perp_lin = N_perp - N_perp_log
-            r_perp_log = np.geomspace(0.5, 5, N_perp_log, endpoint=False)
-            r_perp_lin = np.linspace(5, r_perp_max, N_perp_lin)
-            r_perp_binedge = np.concatenate((r_perp_log, r_perp_lin))
-
-        else:
-            r_perp_binedge  = np.geomspace(r_perp_min, r_perp_max, N_perp)
-
-        r_perp_bins     = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
-        pi_upper_lim    = np.sqrt(np.max(r_data.reshape(-1,1)**2 - r_perp_bins.reshape(1,-1)**2))
-        pi_max          = np.min([pi_upper_lim, r_para_max]) #- 10
-        r_para          = np.linspace(0, pi_max, N_para)
-
-        # Callable func to interpolate xi(r) 
-        xiR_func        = ius(
-            r_data, 
-            xi_data,
-            )
-
-        wp = 2.0 * simpson(
-            xiR_func(np.sqrt(r_perp_bins.reshape(-1, 1)**2 + r_para.reshape(1, -1)**2)), 
-            r_para, 
-            axis=-1,
-            )
-      
-        wp[wp < 0] = 0
-        return r_perp_bins, wp
-
-
-
-    def plot_proj_corrfunc(
-            self, 
-            plot_versions:          Union[List[int], range, str] = "all",
-            max_r_error:            float   = 60.0,
-            nodes_per_simulation:   int     = 1,
-            masked_r:               bool    = False,
-            ):
-        """
-        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
-        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
-        xi_ratio: if True, plot xi/xi_fiducial of xi.  
-        """
-     
-        flag = self.flag 
-        np.random.seed(42)
-        
-
-        # if masked_r:
-        #     r_mask  = self.r_common < max_r_error
-        # else:
-        #     r_mask  = np.ones_like(self.r_common, dtype=bool)
-
-        # r_common    = self.r_common[r_mask]
-        # xi_fiducial = self.xi_fiducial[r_mask]
-        # r_len       = len(r_common)
-
-        fff         = h5py.File(self.data_dir / f"TPCF_{flag}_ng_fixed.hdf5", 'r')
-
-        if type(plot_versions) == list or type(plot_versions) == range:
-            version_list = plot_versions
-        elif type(plot_versions) == int:
-            version_list = [plot_versions]
-        else:
-            version_list = range(self.N_versions)
-
-        for vv in version_list:
-            print(f"Plotting version {vv}")
-            fig, ax = plt.subplots(figsize=(10, 9))
-            plt.rc('axes', prop_cycle=custom_cycler)
-            ax.set_prop_cycle(custom_cycler)
-
-            # Load emulator for this version
-            _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-
-
-            for simulation_key in self.simulation_keys:
-                
-                fff_cosmo = fff[simulation_key]
-                nodes_idx = np.random.randint(0, len(fff_cosmo.keys()), nodes_per_simulation)
-
-
-                for jj in nodes_idx:
-                    fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
-
-                    r_data = fff_cosmo_HOD[self.r_key][...]
-                    r_mask = r_data < max_r_error if masked_r else np.ones_like(r_data, dtype=bool)
-                    r_data = r_data[r_mask]
-
-                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask] 
-
-                    ppp = [fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]
-                    print(ppp)
-                    exit()
-
-                    params_batch   = np.column_stack(
-                        (np.vstack(
-                            [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data)
-                            )
-                            , r_data
-                            ))
-                    
-                    print(params_batch.shape)
-                    exit()
-
-                    xi_emul         = _emulator(params_batch) 
-                    rp_data, wp_data = self.compute_wp(xi_data, r_data, r_perp_min=0.5)
-                    rp_emul, wp_emul = self.compute_wp(xi_emul, r_data, r_perp_min=0.5)
-
-                    ax.plot(rp_data, rp_data * wp_data,     linewidth=0, marker="o", ls="solid",  markersize=2, alpha=1)
-                    ax.plot(rp_emul, rp_emul * wp_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
-
-
-
-            ax.set_xscale("log")
-            ax.set_yscale("log")
-
-            ylabel =  r"$r_\bot w_p(r_\bot)\:[h^{-2}\,\mathrm{Mpc}^{2}]$"
-
-            ax.set_xlabel(r'$\displaystyle  r_\bot \: [h^{-1} \mathrm{Mpc}]$',fontsize=18)
-            ax.set_ylabel(ylabel,fontsize=22)
-
-            plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
-            plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
-            ax.set_title(plot_title)
-
-            ax.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
-            ax.plot([], linewidth=1, color='k', alpha=1, label="emulator")
-            ax.legend(loc="upper right", fontsize=12)
-
-            if not SAVEFIG:
-                plt.show()
-            
-            else:
-
-                if PRESENTATION:
-                    fig_dir_list = list(self.fig_dir.parts)
-                    fig_dir_list.insert(1, "presentation")
-                    figdir = Path("").joinpath(*fig_dir_list)
-                else:
-                    figdir = self.fig_dir
-            
-                figdir.mkdir(parents=True, exist_ok=True)
-                
-                figtitle = f"version{vv}_wp"
-                if masked_r:
-                    figtitle += f"_r_max{max_r_error:.0f}"
-                if PRESENTATION:
-                    week_number = datetime.now().strftime("%U")
-                    figtitle = f"week{int(week_number)}_{figtitle}"
-
-
-                figtitle += ".png"
-                figname = Path(figdir / figtitle)
-                
-
-                plt.savefig(
-                    figname,
-                    dpi=200 if figtitle.endswith(".png") else None,
-                    bbox_inches="tight",
-                    pad_inches=0.05,        
-                )
-                print(f'save plot to {figname}')
-                plt.close(fig)
-                if PUSH:
-                    os.system(f'git add {figname}')
-                    os.system(f'git commit -m "add plot {figname}"')
-                    os.system('git push')
-
-        fff.close()
 
 
     def plot_tpcf(
@@ -702,12 +519,12 @@ class emulator_test:
 
 
 
-S = emulator_test(
-    root_dir="./emulator_data",
-    dataset="vary_r",
-    emul_dir="compare_scaling",
-    flag="val",
-    print_config_param=["feature_scaler", "label_scaler"],
+TPCF = TPCF_emulator(
+    root_dir            =   "./emulator_data",
+    dataset             =   None,
+    emul_dir            =   "first_test",
+    flag                =   "val",
+    print_config_param  =   ["hidden_dims", "dropout"],
 )
 """
 compare_scaling. versions worth looking further into:
@@ -726,4 +543,4 @@ v5: std | std, 176 min (worst)
 # S.save_tpcf_errors()
 # S.print_tpcf_errors()
 
-S.plot_proj_corrfunc(plot_versions=6)
+# S.plot_proj_corrfunc(plot_versions=6)
