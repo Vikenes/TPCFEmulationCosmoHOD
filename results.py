@@ -531,7 +531,7 @@ TPCF_sliced = TPCF_emulator(
 )
 
 
-# TPCF_full.print_tpcf_errors(plot_versions=[1,2,3], min_r_error=0.6, max_r_error=100)
+# TPCF_full.print_tpcf_errors(plot_versions=[0], min_r_error=0.6, max_r_error=100)
 # TPCF_full.print_tpcf_errors(plot_versions=4, print_individual=True, errors_only=True)
 # TPCF_sliced.save_tpcf_errors()#, min_r_error=0.1, max_r_error=100)
 # TPCF_sliced.print_tpcf_errors()#, min_r_error=0.1, max_r_error=100)
