@@ -94,6 +94,7 @@ if train_config.log_save_dir is not None:
     logger_ = TensorBoardLogger(
         save_dir = train_config.default_root_dir, 
         name     = train_config.log_save_dir,
+        # version  = 0 # Set manually if needed
         )
 else:
     logger_ = TensorBoardLogger(
