@@ -110,7 +110,7 @@ trainer = pl.Trainer(
     default_root_dir    = train_config.default_root_dir,
     gradient_clip_val   = train_config.gradient_clip_val if train_config.gradient_clip_val != 0.0 else None,
     logger              = logger_,
-    log_every_n_steps   = 5,
+    # log_every_n_steps   = 5,
     )
 
 scalers_path = Path(trainer.logger.log_dir)

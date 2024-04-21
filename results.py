@@ -538,32 +538,43 @@ class TPCF_emulator:
         fff.close()
 
 
-TPCF_full = TPCF_emulator(
-    root_dir            =   "./emulator_data",
-    dataset             =   None,
-    emul_dir            =   "first_test",
-    flag                =   "val",
-    print_config_param  =   ["batch_size", "hidden_dims"],
-)
+# TPCF_full = TPCF_emulator(
+#     root_dir            =   "./emulator_data",
+#     dataset             =   None,
+#     emul_dir            =   "first_test",
+#     flag                =   "val",
+#     print_config_param  =   ["batch_size", "hidden_dims"],
+# )
 
 
 
-TPCF_sliced = TPCF_emulator(
+TPCF_sliced_1520 = TPCF_emulator(
     root_dir            =   "./emulator_data",
     dataset             =   "sliced_r",
-    emul_dir            =   "first_test",
+    emul_dir            =   "batch_size_1520",
     flag                =   "val",
     print_config_param  =   ["batch_size", "hidden_dims"],
 )
+
+
+TPCF_sliced_3040 = TPCF_emulator(
+    root_dir            =   "./emulator_data",
+    dataset             =   "sliced_r",
+    emul_dir            =   "batch_size_3040",
+    flag                =   "val",
+    print_config_param  =   ["batch_size", "hidden_dims"],
+)
+
 # TPCF_full.save_tpcf_errors(min_r_error=0.1, max_r_error=105, overwrite=True)
 # TPCF_full.plot_tpcf(5, min_r_error=0.1, max_r_error=110, nodes_per_simulation=1)
 # TPCF_full.save_tpcf_errors(max_r_error=100, min_r_error=0.6)
 # TPCF_sliced.save_tpcf_errors()
 
-TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=105, print_individual=True, print_params=True)
+# TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=105, print_individual=True, print_params=True)
 # TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=False)
 
 # TPCF_full.print_tpcf_errors(min_r_error=0.6, max_r_error=100, print_individual=True, print_params=True)
-# TPCF_sliced.print_tpcf_errors(print_individual=True, print_params=True)
+# TPCF_sliced_1520.print_tpcf_errors()
+TPCF_sliced_3040.print_tpcf_errors()
 
 # TPCF_full_2.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=True)
