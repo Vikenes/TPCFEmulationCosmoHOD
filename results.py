@@ -155,7 +155,7 @@ class TPCF_emulator:
 
     def save_tpcf_errors(
             self, 
-            plot_versions:          Union[List[int], range, str] = "all",
+            versions:          Union[List[int], range, str] = "all",
             max_r_error:            float           = np.inf,
             min_r_error:            Optional[float] = 0.0, 
             overwrite:              bool            = False,
@@ -163,10 +163,10 @@ class TPCF_emulator:
         
         flag = self.flag 
         
-        if type(plot_versions) == list or type(plot_versions) == range:
-            version_list = plot_versions
-        elif type(plot_versions) == int:
-            version_list = [plot_versions]
+        if type(versions) == list or type(versions) == range:
+            version_list = versions
+        elif type(versions) == int:
+            version_list = [versions]
         else:
             version_list = range(self.N_versions)
 
@@ -175,7 +175,14 @@ class TPCF_emulator:
         for vv in version_list:
 
             versionpath = Path(f'{self.emul_dir}/version_{vv}')
-            file = Path(versionpath / f'{flag}_errors.txt')
+            # Add suffix to file name with min_r_error and max_r_error information
+            if min_r_error == 0.0 and max_r_error == np.inf:
+                suffix = "full"
+            else:
+                suffix = "sliced"
+            
+            fname = f'{flag}_errors_{suffix}.txt'
+            file = Path(versionpath /fname )
             if file.exists() and not overwrite:
                 continue
                 
@@ -215,7 +222,7 @@ class TPCF_emulator:
 
                     rel_err         = np.abs(xi_emul / xi_data - 1)
                     _err_lst_cosmo.extend(rel_err)
-                
+
                 _err_lst_version.extend(_err_lst_cosmo)
                 err_mean_cosmo.append(np.mean(_err_lst_cosmo))
                 err_median_cosmo.append(np.median(_err_lst_cosmo))
@@ -232,7 +239,6 @@ class TPCF_emulator:
             config_params = []
             for k, v in config_params_dict.items():
                 config_params.append(f"{k}={v}")
-
             # Save errors to file
             print(f'creating file: {file}')
             with open(file, 'w') as f:
@@ -258,7 +264,7 @@ class TPCF_emulator:
 
     def print_tpcf_errors(
             self, 
-            plot_versions:          Union[List[int], range, str] = "all",
+            versions:          Union[List[int], range, str] = "all",
             print_individual:       bool = True,
             print_params:           bool = True,
             min_r_error:            float = 0.0,
@@ -269,25 +275,32 @@ class TPCF_emulator:
         flag = self.flag 
         
 
-        if type(plot_versions) == list or type(plot_versions) == range:
-            version_list = plot_versions
-        elif type(plot_versions) == int:
-            version_list = [plot_versions]
+        if type(versions) == list or type(versions) == range:
+            version_list = versions
+        elif type(versions) == int:
+            version_list = [versions]
         else:
             version_list = range(self.N_versions)
 
         # print(52*"=")
         if overwrite:
-            self.save_tpcf_errors(plot_versions=version_list, max_r_error=max_r_error, min_r_error=min_r_error, overwrite=overwrite)
+            self.save_tpcf_errors(versions=version_list, max_r_error=max_r_error, min_r_error=min_r_error, overwrite=overwrite)
         print(" ", "#"*48)
         print(f"  # {flag} errors: {self.dataset}/{self.emul_dir.name} ")
         print(" ", "#"*48)
 
+        if min_r_error == 0.0 and max_r_error == np.inf:
+            suffix = "full"
+        else:
+            suffix = "sliced"
+        
+        fname = f'{flag}_errors_{suffix}.txt'
+
         for vv in version_list:
             version_path    = Path(self.emul_dir / f'version_{vv}')
-            error_file      = Path(version_path / f'{flag}_errors.txt')
+            error_file      = Path(version_path / fname)
             if not error_file.exists():
-                self.save_tpcf_errors(plot_versions=vv, max_r_error=max_r_error, min_r_error=min_r_error)
+                self.save_tpcf_errors(versions=vv, max_r_error=max_r_error, min_r_error=min_r_error)
 
             tot_errors   = np.loadtxt(error_file, delimiter=',', usecols=[0,1,2], skiprows=self.N_simulations+2, max_rows=1)
             r_min, r_max = np.loadtxt(error_file, delimiter=',', usecols=[0,1], skiprows=self.N_simulations+2)[-1]#, max_rows=1)
@@ -331,7 +344,6 @@ class TPCF_emulator:
             max_r_error:            float   = np.inf,
             min_r_error:            Optional[float] = 0.0,
             nodes_per_simulation:   int     = 1,
-            masked_r:               bool    = False,
             legend:                 bool    = False,
             r_power:                float   = 0.0,
             setaxinfo:              bool    = True,
@@ -342,6 +354,10 @@ class TPCF_emulator:
         masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
         xi_ratio: if True, plot xi/xi_fiducial of xi.  
         """
+        if min_r_error == 0.0 and max_r_error == np.inf:
+            masked_r = False
+        else:
+            masked_r = True
         flag = self.flag 
         available_nodes = np.arange(self.tot_nodes_per_simulation[flag])
         np.random.seed(42)
@@ -368,9 +384,9 @@ class TPCF_emulator:
 
             # Load emulator for this version
             _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
-
+            rel_err_lst_ = []
+            r_data_lst_  = []
             for simulation_key in self.simulation_keys:
-                
                 fff_cosmo = fff[simulation_key]
                 nodes_idx = np.random.choice(available_nodes, nodes_per_simulation, replace=False)
 
@@ -391,14 +407,16 @@ class TPCF_emulator:
                     xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask]
                     xi_emul         = _emulator(params_batch)
                     rel_err         = np.abs(xi_emul / xi_data - 1)
+                    rel_err_lst_.append(rel_err)
+                    r_data_lst_.append(r_data)
 
                     y_data = xi_data * r_data**r_power
                     y_emul = xi_emul * r_data**r_power
 
 
-                    ax0.plot(r_data, y_data, linewidth=0, marker='o', markersize=1, alpha=1)
-                    ax0.plot(r_data, y_emul, linewidth=1, alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
-                    ax1.plot(r_data, rel_err, linewidth=0.7, alpha=0.5, label=f"{np.mean(rel_err)=:.4f}")
+                    ax0.plot(r_data, y_data , linewidth=0,   alpha=1, marker='o', markersize=1)
+                    ax0.plot(r_data, y_emul , linewidth=1,   alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
+                    ax1.plot(r_data, rel_err, linewidth=0.7, alpha=0.5, color="gray")
                 
             
             for i in range(1, 4):
@@ -410,6 +428,19 @@ class TPCF_emulator:
                     color='gray',
                     zorder=100,
                 )
+            if masked_r:
+                
+                N_r_data_tot = np.sum([len(x) for x in r_data_lst_])
+                if N_r_data_tot % self.N_simulations == 0:
+                    # All nodes have the same number of r-values
+                    r_data_mean = np.mean(r_data_lst_, axis=0)
+                    rel_err_lst_ = np.array(rel_err_lst_)
+                    rel_err_mean = np.mean(rel_err_lst_, axis=0)
+                    rel_err_std = np.std(rel_err_lst_, axis=0)
+                
+                    # Plot shaded region for standard deviation
+                    # ax1.fill_between(r_data_mean, rel_err_mean - rel_err_std, rel_err_mean + rel_err_std, alpha=0.1, color='green')
+
 
             if not setaxinfo:
                 ax0.set_xscale("log")
@@ -423,7 +454,8 @@ class TPCF_emulator:
             else:        
                 if r_power <= 1:
                     if masked_r:
-                        ax0.set_ylim([1e-2, 1e4])
+                        pass
+                        # ax0.set_ylim([1.5e-3, 1e5])
                     else:
                         ax0.set_ylim([1e-3, 1e4])
                 elif r_power==1.5:
@@ -431,7 +463,7 @@ class TPCF_emulator:
                 elif r_power==2:
                     ax0.set_ylim([1e1, 3e3])
 
-                ax1.set_ylim([1e-4, 1e0])
+                ax1.set_ylim([1e-3, 8e-1])
 
                 if r_power == 0:
                     ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
@@ -506,22 +538,14 @@ class TPCF_emulator:
         fff.close()
 
 
-
-TPCF_full_1 = TPCF_emulator(
+TPCF_full = TPCF_emulator(
     root_dir            =   "./emulator_data",
     dataset             =   None,
     emul_dir            =   "first_test",
     flag                =   "val",
-    print_config_param  =   ["dropout", "batch_size", "hidden_dims"],
+    print_config_param  =   ["batch_size", "hidden_dims"],
 )
 
-TPCF_full_2 = TPCF_emulator(
-    root_dir            =   "./emulator_data",
-    dataset             =   None,
-    emul_dir            =   "second_test",
-    flag                =   "val",
-    print_config_param  =   ["dropout", "hidden_dims", "batch_size"],
-)
 
 
 TPCF_sliced = TPCF_emulator(
@@ -529,9 +553,17 @@ TPCF_sliced = TPCF_emulator(
     dataset             =   "sliced_r",
     emul_dir            =   "first_test",
     flag                =   "val",
-    print_config_param  =   ["dropout", "batch_size", "hidden_dims"],
+    print_config_param  =   ["batch_size", "hidden_dims"],
 )
+# TPCF_full.save_tpcf_errors(min_r_error=0.1, max_r_error=105, overwrite=True)
+# TPCF_full.plot_tpcf(5, min_r_error=0.1, max_r_error=110, nodes_per_simulation=1)
+# TPCF_full.save_tpcf_errors(max_r_error=100, min_r_error=0.6)
+# TPCF_sliced.save_tpcf_errors()
 
-# TPCF_sliced.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=True)
-# TPCF_full_1.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=True)
+TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=105, print_individual=True, print_params=True)
+# TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=False)
+
+# TPCF_full.print_tpcf_errors(min_r_error=0.6, max_r_error=100, print_individual=True, print_params=True)
+# TPCF_sliced.print_tpcf_errors(print_individual=True, print_params=True)
+
 # TPCF_full_2.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=True)
