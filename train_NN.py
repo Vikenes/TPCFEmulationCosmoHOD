@@ -133,7 +133,8 @@ trainer.fit(model=model,
 
     
 dur = time.time() - t0
-print(f"Model: {trainer.logger.log_dir} took {dur//60:.0f}min {dur%60:.2f}sec to train")
+dur_str = f"{dur//3600:.0f}hrs {(dur%3600)//60:.0f}min {dur%60:.0f}sec"
+print(f"Model: {trainer.logger.log_dir} took {dur_str} to train")
 
 with open(scalers_path / "training_duration.txt", "w") as f:
-    f.write(f"{dur//60:.0f} min {dur%60:.1f} sec\n")
+    f.write(f"{dur_str}\n")
