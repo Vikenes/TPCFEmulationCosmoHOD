@@ -130,7 +130,7 @@ class TPCF_emulator:
         Simplifies comparison of different versions
         """
         assert not isinstance(version, str), "Argument 'version' can not be a string"
-
+        
         # Ensure version to be an iterable
         if version is None:
             version_list = range(self.N_versions)
@@ -140,13 +140,15 @@ class TPCF_emulator:
         else:
             # Version is already an iterable
             version_list = version
+        if print_version_number:
+            print(f"Emulators in {'/'.join(self.emul_dir.parts[-3:])}:")
 
         for ver in version_list:
             vv_config_output = self.get_config_parameter(ver)
             if print_version_number:
                 # Don't want to print version number when we're printing errors
-                print()
-                print(f"Version {ver}:")
+                # print()
+                print(f" v{ver}:")
         
             for k, v in vv_config_output.items():
                 print(f" - {k}={v}")
@@ -340,14 +342,14 @@ class TPCF_emulator:
 
     def plot_tpcf(
             self, 
-            plot_versions:          Union[List[int], range, str] = "all",
+            versions:          Union[List[int], range, str] = "all",
             max_r_error:            float   = np.inf,
-            min_r_error:            Optional[float] = 0.0,
+            min_r_error:            float   = 0.0,
             nodes_per_simulation:   int     = 1,
             legend:                 bool    = False,
             r_power:                float   = 0.0,
             setaxinfo:              bool    = True,
-            plot_title:                  str     = None,
+            plot_title:             str     = None,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -364,10 +366,10 @@ class TPCF_emulator:
         
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
 
-        if type(plot_versions) == list or type(plot_versions) == range:
-            version_list = plot_versions
-        elif type(plot_versions) == int:
-            version_list = [plot_versions]
+        if type(versions) == list or type(versions) == range:
+            version_list = versions
+        elif type(versions) == int:
+            version_list = [versions]
         else:
             version_list = range(self.N_versions)
 
@@ -538,43 +540,14 @@ class TPCF_emulator:
         fff.close()
 
 
-# TPCF_full = TPCF_emulator(
-#     root_dir            =   "./emulator_data",
-#     dataset             =   None,
-#     emul_dir            =   "first_test",
-#     flag                =   "val",
-#     print_config_param  =   ["batch_size", "hidden_dims"],
-# )
-
-
-
-TPCF_sliced_1520 = TPCF_emulator(
-    root_dir            =   "./emulator_data",
-    dataset             =   "sliced_r",
-    emul_dir            =   "batch_size_1520",
-    flag                =   "val",
-    print_config_param  =   ["batch_size", "hidden_dims"],
-)
-
-
 TPCF_sliced_3040 = TPCF_emulator(
     root_dir            =   "./emulator_data",
     dataset             =   "sliced_r",
     emul_dir            =   "batch_size_3040",
     flag                =   "val",
-    print_config_param  =   ["batch_size", "hidden_dims"],
+    print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
 
-# TPCF_full.save_tpcf_errors(min_r_error=0.1, max_r_error=105, overwrite=True)
-# TPCF_full.plot_tpcf(5, min_r_error=0.1, max_r_error=110, nodes_per_simulation=1)
-# TPCF_full.save_tpcf_errors(max_r_error=100, min_r_error=0.6)
-# TPCF_sliced.save_tpcf_errors()
 
-# TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=105, print_individual=True, print_params=True)
-# TPCF_full.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=False)
-
-# TPCF_full.print_tpcf_errors(min_r_error=0.6, max_r_error=100, print_individual=True, print_params=True)
-# TPCF_sliced_1520.print_tpcf_errors()
-TPCF_sliced_3040.print_tpcf_errors()
-
-# TPCF_full_2.print_tpcf_errors(min_r_error=0.1, max_r_error=110, print_individual=False, print_params=True)
+# TPCF_sliced_1520.print_tpcf_errors(min_r_error=0.1, max_r_error=60, overwrite=True)
+# TPCF_sliced_3040.print_tpcf_errors(versions=2)
