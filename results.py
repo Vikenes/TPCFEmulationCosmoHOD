@@ -549,5 +549,6 @@ TPCF_sliced_3040 = TPCF_emulator(
 )
 
 
-# TPCF_sliced_1520.print_tpcf_errors(min_r_error=0.1, max_r_error=60, overwrite=True)
 # TPCF_sliced_3040.print_tpcf_errors(versions=2)
+# TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60, overwrite=True)
+
