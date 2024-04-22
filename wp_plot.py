@@ -222,9 +222,9 @@ class TPCF_emulator:
             # plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
             # ax0.set_title(plot_title)
 
+            ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
+            ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
             if legend:
-                ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
-                ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
                 ax0.legend(loc="upper right", fontsize=12)
 
             if not SAVEFIG:
@@ -276,5 +276,5 @@ TPCF_sliced_3040 = TPCF_emulator(
 )
 
 # SAVEFIG = True
-TPCF_sliced_3040.plot_proj_corrfunc(2, nodes_per_simulation=2)
+# TPCF_sliced_3040.plot_proj_corrfunc(2, nodes_per_simulation=1)
 

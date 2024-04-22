@@ -4,13 +4,10 @@ from datetime import datetime
 import pandas as pd
 import h5py
 import os 
-import yaml 
 from typing import List, Optional, Union
 from collections.abc import Iterable
-import time 
 import sys 
 sys.path.append("../emul_utils")
-from _nn_config import DataConfig #, TrainingConfig, ModelConfig
 from _predict import Predictor
 
 import matplotlib.pyplot as plt
@@ -18,9 +15,6 @@ from matplotlib import gridspec
 from _plot import set_matplotlib_settings, get_CustomCycler
 set_matplotlib_settings()
 custom_cycler = get_CustomCycler()
-
-from scipy.interpolate import interp1d, InterpolatedUnivariateSpline as ius
-from scipy.integrate import simpson 
 
 import warnings 
 warnings.filterwarnings("ignore", category=UserWarning, message="Input line")
@@ -43,7 +37,6 @@ class cm_emulator_class:
             version=0,
             ):
         self.predictor = Predictor.from_path(f"{LIGHTING_LOGS_PATH}/version_{version}")
-        # self.config    = self.predictor.load_config(f"{LIGHTING_LOGS_PATH}/version_{version}")
 
     def __call__(
         self,
@@ -455,27 +448,28 @@ class TPCF_emulator:
             
             else:        
                 if r_power <= 1:
-                    if masked_r:
-                        pass
-                        # ax0.set_ylim([1.5e-3, 1e5])
-                    else:
-                        ax0.set_ylim([1e-3, 5e4])
-                elif r_power==1.5:
-                    ax0.set_ylim([3e0, 2.5e3])
-                elif r_power==2:
-                    ax0.set_ylim([1e1, 3e3])
+                    pass
+                    # if masked_r:
+                    #     ax0.set_ylim([1.5e-3, 1e5])
+                    # else:
+                    #     ax0.set_ylim([1e-3, 5e4])
+                # elif r_power==1.5:
+                #     ax0.set_ylim([3e0, 2.5e3])
+                # elif r_power==2:
+                #     ax0.set_ylim([1e1, 3e3])
 
-                ax1.set_ylim([1e-3, 8e-1])
+                ax1.set_ylim([5e-4, 8e-1])
 
                 if r_power == 0:
                     ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
                 elif r_power == 1:
                     ax0.set_ylabel(r"$r \xi_{gg}(r)$",fontsize=22)
-
+                elif r_power == 1.5:
+                    ax0.set_ylabel(rf"$r^{{3/2}}\xi_{{gg}}(r)$",fontsize=22)
                 else:
                     ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
                 ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
-                ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{N-body}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
+                ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{data}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
 
 
                 ax0.xaxis.set_ticklabels([])
@@ -483,10 +477,10 @@ class TPCF_emulator:
                 ax0.set_yscale("log")
                 ax1.set_yscale("log")
                 ax1.set_xscale("log")
-                if plot_title is None:
-                    plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
-                    plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for each of the {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
-                ax0.set_title(plot_title)
+                # if plot_title is None:
+                    # plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
+                    # plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for each of the {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
+                # ax0.set_title(plot_title)
 
                 ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
                 ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
@@ -510,12 +504,9 @@ class TPCF_emulator:
                 
                     figdir.mkdir(parents=True, exist_ok=True)
                     
-                    figtitle = f'version{vv}_xi'
-                    if masked_r:
-                        figtitle += f"_r_max{max_r_error:.0f}"
-
-                    figtitle += f"_{nodes_per_simulation}nodes"
-
+                    y_title = "xi" if r_power == 0 else f"r_{r_power}_xi"
+                    figtitle = f'version{vv}_{y_title}'
+                
                     if PRESENTATION:
                         week_number = datetime.now().strftime("%U")
                         figtitle = f"week{int(week_number)}_{figtitle}"
@@ -539,7 +530,6 @@ class TPCF_emulator:
 
         fff.close()
 
-
 TPCF_sliced_3040 = TPCF_emulator(
     root_dir            =   "./emulator_data",
     dataset             =   "sliced_r",
@@ -548,10 +538,13 @@ TPCF_sliced_3040 = TPCF_emulator(
     print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
 
-SAVEFIG = True
+# SAVEFIG = True
 # TPCF_sliced_3040.print_tpcf_errors(versions=2)
-# TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60, overwrite=True)
-TPCF_sliced_3040.plot_tpcf(versions=2, max_r_error=60, nodes_per_simulation=2, legend=False, r_power=0, setaxinfo=True, plot_title=None)
-TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=2, legend=False, r_power=0, setaxinfo=True, plot_title=None)
+# TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60)
+# TPCF_sliced_3040.plot_tpcf(versions=2, max_r_error=60, nodes_per_simulation=2, legend=False, r_power=0, setaxinfo=True, plot_title=None)
+# TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=1, plot_title=None)
+# TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=1.5, plot_title=None)
+# TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=2, plot_title=None)
+
 
 
