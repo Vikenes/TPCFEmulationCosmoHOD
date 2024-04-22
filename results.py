@@ -459,7 +459,7 @@ class TPCF_emulator:
                         pass
                         # ax0.set_ylim([1.5e-3, 1e5])
                     else:
-                        ax0.set_ylim([1e-3, 1e4])
+                        ax0.set_ylim([1e-3, 5e4])
                 elif r_power==1.5:
                     ax0.set_ylim([3e0, 2.5e3])
                 elif r_power==2:
@@ -548,7 +548,10 @@ TPCF_sliced_3040 = TPCF_emulator(
     print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
 
-
+SAVEFIG = True
 # TPCF_sliced_3040.print_tpcf_errors(versions=2)
 # TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60, overwrite=True)
+TPCF_sliced_3040.plot_tpcf(versions=2, max_r_error=60, nodes_per_simulation=2, legend=False, r_power=0, setaxinfo=True, plot_title=None)
+TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=2, legend=False, r_power=0, setaxinfo=True, plot_title=None)
+
 
