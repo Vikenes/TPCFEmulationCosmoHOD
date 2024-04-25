@@ -461,11 +461,11 @@ class TPCF_emulator:
                 ax1.set_ylim([5e-4, 8e-1])
 
                 if r_power == 0:
-                    ax0.set_ylabel(r"$\xi_{gg}(r)$",fontsize=22)
+                    ax0.set_ylabel(r"$\xi^R(r)$",fontsize=22)
                 elif r_power == 1:
-                    ax0.set_ylabel(r"$r \xi_{gg}(r)\:[h^{-1}\mathrm{Mpc}]$",fontsize=22)
+                    ax0.set_ylabel(r"$r \xi^R(r)\:[h^{-1}\mathrm{Mpc}]$",fontsize=22)
                 elif r_power == 2:
-                    ax0.set_ylabel(r"$r \xi_{gg}(r)\:[h^{-2}\mathrm{Mpc}^2]$",fontsize=22)
+                    ax0.set_ylabel(r"$r \xi^R(r)\:[h^{-2}\mathrm{Mpc}^2]$",fontsize=22)
                 else:
                     ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
                 ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
