@@ -19,14 +19,8 @@ custom_cycler = get_CustomCycler()
 import warnings 
 warnings.filterwarnings("ignore", category=UserWarning, message="Input line")
 
-
 global SAVEFIG 
-global PUSH
-global PRESENTATION
-
 SAVEFIG         = False
-PUSH            = False
-PRESENTATION    = False
 
 dataset_names = {"train": "Training", "val": "Validation", "test": "Test"}
 
@@ -84,7 +78,8 @@ class TPCF_emulator:
         with h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r') as fff:
             self.simulation_keys = [key for key in fff.keys() if key.startswith("AbacusSummit")]
             self.N_simulations   = len(self.simulation_keys)
-        self.tot_nodes_per_simulation = {
+            self.N_bins_per_node = fff[self.simulation_keys[0]]["node0"][self.r_key].shape[0]
+        self.N_nodes_per_simulation = {
             "test": 100,
             "val": 100,
             "train": 500,
@@ -331,7 +326,61 @@ class TPCF_emulator:
 
             print("\n")
 
+    def get_rel_err_all(
+            self, 
+            version:                int,
+            percentile:             float = 68,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
+        flag = self.flag 
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
 
+        outfname_stem   = f"./rel_errors/v{version}_{flag}_xi"
+        statistics      = ["mean", "median", "stddev", f"{percentile}percentile"]
+        fnames          = {
+            stat: Path(f"{outfname_stem}_{stat}.npy") for stat in statistics if not Path(f"{outfname_stem}_{stat}.npy").exists()
+        }
+        # Check if fnames is empty
+        if not fnames:
+            print("All files exist. Exiting.")
+            return
+        print(f"Saving {[k for k in fnames.keys()]} for v{version}")
+
+        # Load emulator for this version
+        _emulator       = cm_emulator_class(version=version,LIGHTING_LOGS_PATH=self.emul_dir)
+        rel_err_arr_ = np.zeros((self.N_simulations, self.N_nodes_per_simulation[flag], self.N_bins_per_node))
+        for ii, simulation_key in enumerate(self.simulation_keys):
+            fff_cosmo = fff[simulation_key]
+
+            for jj in range(self.N_nodes_per_simulation[flag]):
+                fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
+
+                r_data  = fff_cosmo_HOD[self.r_key][...]
+
+                params_batch   = np.column_stack(
+                    (np.vstack(
+                        [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
+                        , r_data
+                        ))
+
+                xi_data                 = fff_cosmo_HOD[self.xi_key][...]
+                xi_emul                 = _emulator(params_batch)
+                rel_err_arr_[ii, jj, :] = np.abs(xi_emul / xi_data - 1)
+               
+        # Compute mean, median, stddev as a function of r
+        rel_err_statistics = {
+            "mean":                     np.mean(rel_err_arr_, axis=(0,1)),
+            "median":                   np.median(rel_err_arr_, axis=(0,1)),
+            "stddev":                   np.std(rel_err_arr_, axis=(0,1)),
+            f"{percentile}percentile":  np.percentile(rel_err_arr_, percentile, axis=(0,1)),
+        }
+        for key in fnames.keys():
+            print(f"Saving {fnames[key]}")
+            np.save(fnames[key], rel_err_statistics[key])
 
     def plot_tpcf(
             self, 
@@ -339,26 +388,18 @@ class TPCF_emulator:
             max_r_error:            float   = np.inf,
             min_r_error:            float   = 0.0,
             nodes_per_simulation:   int     = 1,
-            legend:                 bool    = False,
+            legend:                 bool    = True,
             r_power:                float   = 0.0,
             setaxinfo:              bool    = True,
             outfig:                 str     = None,
+            percentile:             float   = 68,
+            rel_err_statistics:     bool    = False,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
         masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
         xi_ratio: if True, plot xi/xi_fiducial of xi.  
         """
-        if min_r_error == 0.0 and max_r_error == np.inf:
-            masked_r = False
-        else:
-            masked_r = True
-        flag = self.flag 
-        available_nodes = np.arange(self.tot_nodes_per_simulation[flag])
-        np.random.seed(42)
-        
-        fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
-
         if type(versions) == list or type(versions) == range:
             version_list = versions
         elif type(versions) == int:
@@ -366,7 +407,19 @@ class TPCF_emulator:
         else:
             version_list = range(self.N_versions)
 
+        if min_r_error == 0.0 and max_r_error == np.inf:
+            masked_r = False
+        else:
+            masked_r = True
+
+        flag = self.flag 
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
+        np.random.seed(42)
+        available_nodes = np.arange(self.N_nodes_per_simulation[flag])
         
+        nodes_idx = {
+            simulation_key: np.random.choice(available_nodes, nodes_per_simulation, replace=False) for simulation_key in self.simulation_keys
+        }
 
         for vv in version_list:
             print(f"Plotting version {vv}")
@@ -383,14 +436,15 @@ class TPCF_emulator:
             r_data_lst_  = []
             for simulation_key in self.simulation_keys:
                 fff_cosmo = fff[simulation_key]
-                nodes_idx = np.random.choice(available_nodes, nodes_per_simulation, replace=False)
 
-                for jj in nodes_idx:
+
+                for jj in nodes_idx[simulation_key]:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
 
                     r_data  = fff_cosmo_HOD[self.r_key][...]
                     r_mask = (r_data > min_r_error) & (r_data < max_r_error)
                     r_data  = r_data[r_mask]
+
 
 
                     params_batch   = np.column_stack(
@@ -412,8 +466,6 @@ class TPCF_emulator:
                     ax0.plot(r_data, y_data , linewidth=0,   alpha=1, marker='o', markersize=1)
                     ax0.plot(r_data, y_emul , linewidth=1,   alpha=1)
                     ax1.plot(r_data, rel_err, linewidth=0.7, alpha=0.5, color="gray")
-                
-            
             for i in range(1, 4):
                 ax1.plot(
                     r_data,
@@ -423,18 +475,19 @@ class TPCF_emulator:
                     color='gray',
                     zorder=100,
                 )
-            if masked_r:
+            if rel_err_statistics:
                 
-                N_r_data_tot = np.sum([len(x) for x in r_data_lst_])
-                if N_r_data_tot % self.N_simulations == 0:
-                    # All nodes have the same number of r-values
-                    r_data_mean = np.mean(r_data_lst_, axis=0)
-                    rel_err_lst_ = np.array(rel_err_lst_)
-                    rel_err_mean = np.mean(rel_err_lst_, axis=0)
-                    rel_err_std = np.std(rel_err_lst_, axis=0)
-                
-                    # Plot shaded region for standard deviation
-                    # ax1.fill_between(r_data_mean, rel_err_mean - rel_err_std, rel_err_mean + rel_err_std, alpha=0.1, color='green')
+                # All nodes have the same number of r-values
+                rel_err_mean        = np.load(f"./rel_errors/v{vv}_{flag}_xi_mean.npy")[r_mask]
+                rel_err_median      = np.load(f"./rel_errors/v{vv}_{flag}_xi_median.npy")[r_mask]
+                rel_err_stddev      = np.load(f"./rel_errors/v{vv}_{flag}_xi_stddev.npy")[r_mask]
+                rel_err_percentile  = np.load(f"./rel_errors/v{vv}_{flag}_xi_{percentile}percentile.npy")[r_mask]
+            
+                # Plot shaded region for standard deviation
+                # ax1.fill_between(r_data, rel_err_mean - rel_err_stddev, rel_err_mean + rel_err_stddev, alpha=0.1, color='red', zorder=0)
+                ax1.plot(r_data, rel_err_mean, linewidth=1, color='green', label="Mean")
+                ax1.plot(r_data, rel_err_median, linewidth=1, color='blue', label="Median")
+                # ax1.plot(r_data, rel_err_perc, linewidth=1, color='red', label=f"{percentile}th percentile")
 
 
             if not setaxinfo and outfig is None:
@@ -458,7 +511,7 @@ class TPCF_emulator:
                 # elif r_power==2:
                 #     ax0.set_ylim([1e1, 3e3])
 
-                ax1.set_ylim([5e-4, 8e-1])
+                ax1.set_ylim([5e-4, 9.9e-1])
 
                 if r_power == 0:
                     ax0.set_ylabel(r"$\xi^R(r)$",fontsize=22)
@@ -469,7 +522,7 @@ class TPCF_emulator:
                 else:
                     ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
                 ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
-                ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi_{gg}^\mathrm{pred} - \xi_{gg}^\mathrm{data}}{\xi_{gg}^\mathrm{pred}}\right|$',fontsize=15)
+                ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi^R_\mathrm{pred} - \xi^R_\mathrm{data}}{\xi^R_\mathrm{pred}}\right|$',fontsize=15)
 
 
                 ax0.xaxis.set_ticklabels([])
@@ -486,6 +539,7 @@ class TPCF_emulator:
                 ax0.plot([], linewidth=1, color='k', alpha=1, label="Emulator")
                 if legend:
                     ax0.legend(loc="upper right", fontsize=12)
+                    ax1.legend(loc="upper left", fontsize=12)
 
                 if not SAVEFIG and outfig is None:
                     if masked_r:
@@ -519,22 +573,22 @@ TPCF_sliced_3040 = TPCF_emulator(
     flag                =   "test",
     print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
-
-r_powers = [1, 2]
-for r_power in r_powers:
-    outfig = f"plots/thesis_figures/emulators/r_power_{r_power}_xi_{TPCF_sliced_3040.flag}"
-    outfig_pdf = f"{outfig}.pdf"
-    outfig_png = f"{outfig}.png"
-    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_pdf)
-    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_png)
-
-# SAVEFIG = True
-# TPCF_sliced_3040.print_tpcf_errors(versions=2)
-# TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60)
-# TPCF_sliced_3040.plot_tpcf(versions=2, max_r_error=60, nodes_per_simulation=2, legend=False, r_power=0, setaxinfo=True, plot_title=None)
-# TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=1, plot_title=None)
-# TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=1.5, plot_title=None)
-# TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=2, plot_title=None)
+def plot_xi():
+    r_powers = [1, 2]
+    for r_power in r_powers:
+        outfig = f"plots/thesis_figures/emulators/r_power_{r_power}_xi_{TPCF_sliced_3040.flag}"
+        outfig_pdf = f"{outfig}.pdf"
+        outfig_png = f"{outfig}.png"
+        TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_pdf)
+        TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_png)
+def print_xi_err():
+    TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, overwrite=False)
+    TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, min_r_error=0.1, max_r_error=60, overwrite=True)
 
 
+
+# print_xi_err()
+# plot_xi()
+TPCF_sliced_3040.get_rel_err_all(version=2)
+# TPCF_sliced_3040.plot_tpcf(2, rel_err_statistics=True)
 
