@@ -342,7 +342,7 @@ class TPCF_emulator:
             legend:                 bool    = False,
             r_power:                float   = 0.0,
             setaxinfo:              bool    = True,
-            plot_title:             str     = None,
+            outfig:                 str     = None,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -437,7 +437,7 @@ class TPCF_emulator:
                     # ax1.fill_between(r_data_mean, rel_err_mean - rel_err_std, rel_err_mean + rel_err_std, alpha=0.1, color='green')
 
 
-            if not setaxinfo:
+            if not setaxinfo and outfig is None:
                 ax0.set_xscale("log")
                 ax0.set_yscale("log")
 
@@ -487,46 +487,28 @@ class TPCF_emulator:
                 if legend:
                     ax0.legend(loc="upper right", fontsize=12)
 
-                if not SAVEFIG:
+                if not SAVEFIG and outfig is None:
                     if masked_r:
                         ax0.plot(r_data, np.ones_like(r_data), lw=0)
                     plt.show()
                 
                 else:
-                
-
-                    if PRESENTATION:
-                        fig_dir_list = list(self.fig_dir.parts)
-                        fig_dir_list.insert(1, "presentation")
-                        figdir = Path("").joinpath(*fig_dir_list)
-                    else:
-                        figdir = self.fig_dir
-                
-                    figdir.mkdir(parents=True, exist_ok=True)
+                    if outfig is None:
+                        figdir = self.fig_dir 
+                        figdir.mkdir(parents=True, exist_ok=True)
                     
-                    y_title = "xi" if r_power == 0 else f"r_{r_power}_xi"
-                    figtitle = f'version{vv}_{y_title}'
-                
-                    if PRESENTATION:
-                        week_number = datetime.now().strftime("%U")
-                        figtitle = f"week{int(week_number)}_{figtitle}"
-
-
-                    figtitle += ".png"
-                    figname = Path(figdir / figtitle)
-
+                        y_title = "xi" if r_power == 0 else f"r_{r_power}_xi"
+                        figtitle = f'version{vv}_{y_title}.png'
+                        outfig = Path(figdir / figtitle)
                     plt.savefig(
-                        figname,
-                        dpi=200 if figtitle.endswith(".png") else None,
+                        Path(outfig),
+                        dpi=200 if outfig.endswith(".png") else None,
                         bbox_inches="tight",
                         pad_inches=0.05,        
                     )
-                    print(f'save plot to {figname}')
+                    print(f'save plot to {outfig}')
                     plt.close(fig)
-                    if PUSH:
-                        os.system(f'git add {figname}')
-                        os.system(f'git commit -m "add plot {figname}"')
-                        os.system('git push')
+
 
         fff.close()
 
@@ -538,6 +520,10 @@ TPCF_sliced_3040 = TPCF_emulator(
     print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
 
+r_powers = [0, 1, 1.5, 2]
+for r_power in r_powers:
+    outfig = f"plots/thesis_figures/r_power_{r_power}_xi.pdf"
+    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=2, legend=False, r_power=r_power, setaxinfo=True, outfig=outfig)
 # SAVEFIG = True
 # TPCF_sliced_3040.print_tpcf_errors(versions=2)
 # TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60)
