@@ -500,9 +500,11 @@ class TPCF_emulator:
                         y_title = "xi" if r_power == 0 else f"r_{r_power}_xi"
                         figtitle = f'version{vv}_{y_title}.png'
                         outfig = Path(figdir / figtitle)
+                    else:
+                        outfig = Path(outfig)
                     plt.savefig(
-                        Path(outfig),
-                        dpi=200 if outfig.endswith(".png") else None,
+                        outfig,
+                        dpi=150 if outfig.endswith(".png") else None,
                         bbox_inches="tight",
                         pad_inches=0.05,        
                     )
@@ -516,14 +518,18 @@ TPCF_sliced_3040 = TPCF_emulator(
     root_dir            =   "./emulator_data",
     dataset             =   "sliced_r",
     emul_dir            =   "batch_size_3040",
-    flag                =   "val",
+    flag                =   "test",
     print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
 
 r_powers = [0, 1, 1.5, 2]
 for r_power in r_powers:
-    outfig = f"plots/thesis_figures/r_power_{r_power}_xi.pdf"
-    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=2, legend=False, r_power=r_power, setaxinfo=True, outfig=outfig)
+    outfig = f"plots/thesis_figures/emulators/r_power_{r_power}_xi_{TPCF_sliced_3040.flag}"
+    outfig_pdf = f"{outfig}.pdf"
+    outfig_png = f"{outfig}.png"
+    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=r_power, setaxinfo=True, outfig=outfig_pdf)
+    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=r_power, setaxinfo=True, outfig=outfig_png)
+
 # SAVEFIG = True
 # TPCF_sliced_3040.print_tpcf_errors(versions=2)
 # TPCF_sliced_3040.print_tpcf_errors(versions=2, max_r_error=60)

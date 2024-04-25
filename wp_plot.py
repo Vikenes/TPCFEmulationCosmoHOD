@@ -118,6 +118,7 @@ class TPCF_emulator:
             min_r_error:            float   = 0.0,
             nodes_per_simulation:   int     = 1,
             legend:                 bool    = False,
+            outfig:                 str     = None,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -227,44 +228,24 @@ class TPCF_emulator:
             if legend:
                 ax0.legend(loc="upper right", fontsize=12)
 
-            if not SAVEFIG:
+            if not SAVEFIG and outfig is None:
                 plt.show()
             
             else:
 
-                if PRESENTATION:
-                    fig_dir_list = list(self.fig_dir.parts)
-                    fig_dir_list.insert(1, "presentation")
-                    figdir = Path("").joinpath(*fig_dir_list)
-                else:
+                if outfig is None:
                     figdir = self.fig_dir
-            
-                figdir.mkdir(parents=True, exist_ok=True)
-                
-                figtitle = f"version{vv}_wp"
-                if masked_r:
-                    figtitle += f"_r_max{max_r_error:.0f}"
-                if PRESENTATION:
-                    week_number = datetime.now().strftime("%U")
-                    figtitle = f"week{int(week_number)}_{figtitle}"
-
-
-                figtitle += ".png"
-                figname = Path(figdir / figtitle)
-                
-
+                    figdir.mkdir(parents=True, exist_ok=True)
+                    figtitle = f"version{vv}_wp.png"
+                    outfig = f"{figdir}/{figtitle}"
                 plt.savefig(
-                    figname,
-                    dpi=200 if figtitle.endswith(".png") else None,
+                    Path(outfig),
+                    dpi=150 if outfig.endswith(".png") else None,
                     bbox_inches="tight",
                     pad_inches=0.05,        
                 )
-                print(f'save plot to {figname}')
+                print(f'save plot to {outfig}')
                 plt.close(fig)
-                if PUSH:
-                    os.system(f'git add {figname}')
-                    os.system(f'git commit -m "add plot {figname}"')
-                    os.system('git push')
 
         fff.close()
 
@@ -272,9 +253,12 @@ TPCF_sliced_3040 = TPCF_emulator(
     root_dir            =   "./emulator_data",
     dataset             =   "sliced_r",
     emul_dir            =   "batch_size_3040",
-    flag                =   "val",
+    flag                =   "test",
 )
 
 # SAVEFIG = True
-# TPCF_sliced_3040.plot_proj_corrfunc(2, nodes_per_simulation=1)
+outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, outfig=f"{outfig_stem}.png")
+TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, outfig=f"{outfig_stem}.pdf")
+
 
