@@ -82,6 +82,7 @@ class TPCF_emulator:
         with h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r') as fff:
             self.simulation_keys = [key for key in fff.keys() if key.startswith("AbacusSummit")]
             self.N_simulations   = len(self.simulation_keys)
+            max_r = np.floor(fff[self.simulation_keys[0]]["node0"][self.r_key][-1])
         self.N_nodes_per_simulation = {
             "test": 100,
             "val": 100,
@@ -90,7 +91,7 @@ class TPCF_emulator:
 
         self.r_perp_binedge = np.geomspace(0.5, 40, 40)
         self.r_perp         = (self.r_perp_binedge[1:] + self.r_perp_binedge[:-1]) / 2
-        self.r_para         = np.linspace(0, 100, int(1000))
+        self.r_para         = np.linspace(0, 105, int(1000))
         self.r_from_rp_rpi  = np.sqrt(self.r_perp.reshape(-1, 1)**2 + self.r_para.reshape(1, -1)**2)
 
     def compute_wp_from_xi_of_r(
@@ -105,7 +106,7 @@ class TPCF_emulator:
         """
 
         # Callable func to interpolate xi(r) 
-        xiR_func        = ius(r, xi)
+        xiR_func        = ius(r, xi, ext=1)
 
         wp = 2.0 * simpson(
             xiR_func(self.r_from_rp_rpi), 
@@ -227,10 +228,7 @@ class TPCF_emulator:
 
                 for jj in nodes_idx[simulation_key]:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
-
                     r_data = fff_cosmo_HOD[self.r_key][...]
-                    r_data = r_data
-
 
                     params_batch   = np.column_stack(
                         (np.vstack(
@@ -265,6 +263,7 @@ class TPCF_emulator:
                 rel_err_median      = np.load(f"./rel_errors/v{vv}_{flag}_wp_median.npy")
                 rel_err_stddev      = np.load(f"./rel_errors/v{vv}_{flag}_wp_stddev.npy")
                 rel_err_percentile  = np.load(f"./rel_errors/v{vv}_{flag}_wp_{percentile}percentile.npy")
+                print(np.mean(rel_err_mean)) 
             
                 # Plot shaded region for standard deviation
                 # ax1.fill_between(r_data, rel_err_mean - rel_err_stddev, rel_err_mean + rel_err_stddev, alpha=0.1, color='red', zorder=0)
@@ -328,7 +327,7 @@ TPCF_sliced_3040 = TPCF_emulator(
 )
 
 # SAVEFIG = True
-outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+# outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
 # TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
 # TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
 
