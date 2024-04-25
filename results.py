@@ -511,7 +511,7 @@ class TPCF_emulator:
                 # elif r_power==2:
                 #     ax0.set_ylim([1e1, 3e3])
 
-                ax1.set_ylim([5e-4, 9.9e-1])
+                ax1.set_ylim([5e-4, 0.9e0])
 
                 if r_power == 0:
                     ax0.set_ylabel(r"$\xi^R(r)$",fontsize=22)
@@ -544,6 +544,7 @@ class TPCF_emulator:
                 if not SAVEFIG and outfig is None:
                     if masked_r:
                         ax0.plot(r_data, np.ones_like(r_data), lw=0)
+                    fig.tight_layout()
                     plt.show()
                 
                 else:
@@ -579,8 +580,8 @@ def plot_xi():
         outfig = f"plots/thesis_figures/emulators/r_power_{r_power}_xi_{TPCF_sliced_3040.flag}"
         outfig_pdf = f"{outfig}.pdf"
         outfig_png = f"{outfig}.png"
-        TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_pdf)
-        TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_png)
+        TPCF_sliced_3040.plot_tpcf(versions=2, r_power=r_power, rel_err_statistics=True, outfig=outfig_pdf)
+        TPCF_sliced_3040.plot_tpcf(versions=2, r_power=r_power, rel_err_statistics=True, outfig=outfig_png)
 def print_xi_err():
     TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, overwrite=False)
     TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, min_r_error=0.1, max_r_error=60, overwrite=True)
@@ -589,6 +590,6 @@ def print_xi_err():
 
 # print_xi_err()
 # plot_xi()
-TPCF_sliced_3040.get_rel_err_all(version=2)
+# TPCF_sliced_3040.get_rel_err_all(version=2)
 # TPCF_sliced_3040.plot_tpcf(2, rel_err_statistics=True)
 

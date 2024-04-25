@@ -328,11 +328,11 @@ TPCF_sliced_3040 = TPCF_emulator(
 )
 
 # SAVEFIG = True
-# outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
-# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, legend=True, outfig=f"{outfig_stem}.png")
-# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, legend=True, outfig=f"{outfig_stem}.pdf")
+outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
+# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
 
 # TPCF_sliced_3040.get_rel_err_all(2)
-TPCF_sliced_3040.plot_proj_corrfunc(2, rel_err_statistics=True)
+# TPCF_sliced_3040.plot_proj_corrfunc(2, rel_err_statistics=True)
 
 
