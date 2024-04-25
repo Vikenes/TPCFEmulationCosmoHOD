@@ -410,7 +410,7 @@ class TPCF_emulator:
 
 
                     ax0.plot(r_data, y_data , linewidth=0,   alpha=1, marker='o', markersize=1)
-                    ax0.plot(r_data, y_emul , linewidth=1,   alpha=1, label=f"{simulation_key.split('_')[2]}_node{jj}")
+                    ax0.plot(r_data, y_emul , linewidth=1,   alpha=1)
                     ax1.plot(r_data, rel_err, linewidth=0.7, alpha=0.5, color="gray")
                 
             
@@ -482,8 +482,8 @@ class TPCF_emulator:
                     # plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for each of the {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
                 # ax0.set_title(plot_title)
 
-                ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="data")
-                ax0.plot([], linewidth=1, color='k', alpha=1, label="emulator")
+                ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="Data")
+                ax0.plot([], linewidth=1, color='k', alpha=1, label="Emulator")
                 if legend:
                     ax0.legend(loc="upper right", fontsize=12)
 
@@ -525,8 +525,8 @@ for r_power in r_powers:
     outfig = f"plots/thesis_figures/emulators/r_power_{r_power}_xi_{TPCF_sliced_3040.flag}"
     outfig_pdf = f"{outfig}.pdf"
     outfig_png = f"{outfig}.png"
-    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=r_power, setaxinfo=True, outfig=outfig_pdf)
-    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=False, r_power=r_power, setaxinfo=True, outfig=outfig_png)
+    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_pdf)
+    TPCF_sliced_3040.plot_tpcf(versions=2, nodes_per_simulation=1, legend=True, r_power=r_power, setaxinfo=True, outfig=outfig_png)
 
 # SAVEFIG = True
 # TPCF_sliced_3040.print_tpcf_errors(versions=2)
