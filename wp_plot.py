@@ -82,11 +82,16 @@ class TPCF_emulator:
         with h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r') as fff:
             self.simulation_keys = [key for key in fff.keys() if key.startswith("AbacusSummit")]
             self.N_simulations   = len(self.simulation_keys)
-        self.tot_nodes_per_simulation = {
+        self.N_nodes_per_simulation = {
             "test": 100,
             "val": 100,
             "train": 500,
         }
+
+        self.r_perp_binedge = np.geomspace(0.5, 40, 40)
+        self.r_perp         = (self.r_perp_binedge[1:] + self.r_perp_binedge[:-1]) / 2
+        self.r_para         = np.linspace(0, 100, int(1000))
+        self.r_from_rp_rpi  = np.sqrt(self.r_perp.reshape(-1, 1)**2 + self.r_para.reshape(1, -1)**2)
 
     def compute_wp_from_xi_of_r(
             self,
@@ -109,40 +114,80 @@ class TPCF_emulator:
             )
       
         return wp
-        
-
-    def plot_proj_corrfunc(
+    
+    def get_rel_err_all(
             self, 
-            versions:          Union[List[int], range, str] = "all",
-            max_r_error:            float   = np.inf,
-            min_r_error:            float   = 0.0,
-            nodes_per_simulation:   int     = 1,
-            legend:                 bool    = False,
-            outfig:                 str     = None,
+            version:                int,
+            percentile:             float = 68,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
         masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
         xi_ratio: if True, plot xi/xi_fiducial of xi.  
         """
-     
-        if min_r_error == 0.0 and max_r_error == np.inf:
-            masked_r = False
-        else:
-            masked_r = True
         flag = self.flag 
-        available_nodes = np.arange(self.tot_nodes_per_simulation[flag])
-        np.random.seed(42)
-
-
-        r_perp_binedge      = np.geomspace(0.5, 40, 40)
-        self.r_perp         = (r_perp_binedge[1:] + r_perp_binedge[:-1]) / 2
-        self.r_para         = np.linspace(0, 100, int(1000))
-        self.r_from_rp_rpi  = np.sqrt(self.r_perp.reshape(-1, 1)**2 + self.r_para.reshape(1, -1)**2)
-        
-
-        
         fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
+
+        outfname_stem   = f"./rel_errors/v{version}_{flag}_wp"
+        statistics      = ["mean", "median", "stddev", f"{percentile}percentile"]
+        fnames          = {
+            stat: Path(f"{outfname_stem}_{stat}.npy") for stat in statistics if not Path(f"{outfname_stem}_{stat}.npy").exists()
+        }
+        # Check if fnames is empty
+        if not fnames:
+            print("All files exist. Exiting.")
+            return
+        print(f"Saving {[k for k in fnames.keys()]} for v{version}")
+        
+        # Load emulator for this version
+        _emulator       = cm_emulator_class(version=version,LIGHTING_LOGS_PATH=self.emul_dir)
+        rel_err_arr_    = np.zeros((self.N_simulations, self.N_nodes_per_simulation[flag], len(self.r_perp)))
+     
+        for ii, simulation_key in enumerate(self.simulation_keys):
+            fff_cosmo = fff[simulation_key]
+
+            for jj in range(self.N_nodes_per_simulation[flag]):
+                fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
+
+                r_data  = fff_cosmo_HOD[self.r_key][...]
+
+                params_batch   = np.column_stack(
+                    (np.vstack(
+                        [[fff_cosmo_HOD.attrs[param_name] for param_name in self.param_names]] * len(r_data))
+                        , r_data
+                        ))
+
+                xi_data                 = fff_cosmo_HOD[self.xi_key][...]
+                xi_emul                 = _emulator(params_batch)
+                wp_data                 = self.compute_wp_from_xi_of_r(xi_data, r_data)
+                wp_emul                 = self.compute_wp_from_xi_of_r(xi_emul, r_data)
+                rel_err_arr_[ii, jj, :] = np.abs(wp_emul / wp_data - 1.0)
+               
+        rel_err_statistics = {
+            "mean":                     np.mean(rel_err_arr_, axis=(0,1)),
+            "median":                   np.median(rel_err_arr_, axis=(0,1)),
+            "stddev":                   np.std(rel_err_arr_, axis=(0,1)),
+            f"{percentile}percentile":  np.percentile(rel_err_arr_, percentile, axis=(0,1)),
+        }
+        for key in fnames.keys():
+            print(f" - Saving {fnames[key]}")
+            np.save(fnames[key], rel_err_statistics[key])
+            
+
+    def plot_proj_corrfunc(
+            self, 
+            versions:          Union[List[int], range, str] = "all",
+            nodes_per_simulation:   int     = 1,
+            legend:                 bool    = True,
+            outfig:                 str     = None,
+            percentile:             float   = 68,
+            rel_err_statistics:     bool    = False,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
 
         if type(versions) == list or type(versions) == range:
             version_list = versions
@@ -150,6 +195,20 @@ class TPCF_emulator:
             version_list = [versions]
         else:
             version_list = range(self.N_versions)
+
+        flag = self.flag 
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
+        np.random.seed(42)
+        available_nodes = np.arange(self.N_nodes_per_simulation[flag])
+        
+        nodes_idx = {
+            simulation_key: np.random.choice(available_nodes, nodes_per_simulation, replace=False) for simulation_key in self.simulation_keys
+        }
+
+        
+
+        
+        fff   = h5py.File(self.data_dir / f"TPCF_{flag}.hdf5", 'r')
 
         for vv in version_list:
             print(f"Plotting version {vv}")
@@ -165,14 +224,12 @@ class TPCF_emulator:
 
             for simulation_key in self.simulation_keys:                
                 fff_cosmo = fff[simulation_key]
-                nodes_idx = np.random.choice(available_nodes, nodes_per_simulation, replace=False)
 
-                for jj in nodes_idx:
+                for jj in nodes_idx[simulation_key]:
                     fff_cosmo_HOD = fff_cosmo[f"node{jj}"]
 
                     r_data = fff_cosmo_HOD[self.r_key][...]
-                    r_mask = (r_data > min_r_error) & (r_data < max_r_error)
-                    r_data = r_data[r_mask]
+                    r_data = r_data
 
 
                     params_batch   = np.column_stack(
@@ -182,7 +239,7 @@ class TPCF_emulator:
                             , r_data
                             ))
                     
-                    xi_data = fff_cosmo_HOD[self.xi_key][...][r_mask] 
+                    xi_data = fff_cosmo_HOD[self.xi_key][...]
                     xi_emul = _emulator(params_batch) 
                     wp_data = self.compute_wp_from_xi_of_r(xi_data, r_data)
                     wp_emul = self.compute_wp_from_xi_of_r(xi_emul, r_data)
@@ -192,7 +249,6 @@ class TPCF_emulator:
                     ax0.plot(self.r_perp, self.r_perp * wp_data, linewidth=0, marker="o",  markersize=2, alpha=1)
                     ax0.plot(self.r_perp, self.r_perp * wp_emul, linewidth=1, alpha=1)
                     ax1.plot(self.r_perp, rel_err, linewidth=0.7, alpha=0.5, color="gray")
-
             for i in range(1, 4):
                 ax1.plot(
                     self.r_perp,
@@ -202,13 +258,27 @@ class TPCF_emulator:
                     color='gray',
                     zorder=100,
                 )
+            if rel_err_statistics:
+                
+                # All nodes have the same number of r-values
+                rel_err_mean        = np.load(f"./rel_errors/v{vv}_{flag}_wp_mean.npy")
+                rel_err_median      = np.load(f"./rel_errors/v{vv}_{flag}_wp_median.npy")
+                rel_err_stddev      = np.load(f"./rel_errors/v{vv}_{flag}_wp_stddev.npy")
+                rel_err_percentile  = np.load(f"./rel_errors/v{vv}_{flag}_wp_{percentile}percentile.npy")
+            
+                # Plot shaded region for standard deviation
+                # ax1.fill_between(r_data, rel_err_mean - rel_err_stddev, rel_err_mean + rel_err_stddev, alpha=0.1, color='red', zorder=0)
+                ax1.plot(self.r_perp, rel_err_mean, linewidth=1, color='green', label="Mean")
+                ax1.plot(self.r_perp, rel_err_median, linewidth=1, color='blue', label="Median")
+                # ax1.plot(r_data, rel_err_perc, linewidth=1, color='red', label=f"{percentile}th percentile")
+
 
             ax0.xaxis.set_ticklabels([])
             ax0.set_xscale("log")
             ax0.set_yscale("log")
             ax1.set_xscale("log")
             ax1.set_yscale("log")
-            ax1.set_ylim([1e-4, 1e-1])
+            ax1.set_ylim([5e-4, 0.9e-1])
 
 
 
@@ -227,6 +297,7 @@ class TPCF_emulator:
             ax0.plot([], linewidth=1, color='k', alpha=1, label="Emulator")
             if legend:
                 ax0.legend(loc="upper right", fontsize=12)
+                ax1.legend(loc="upper left", fontsize=12)
 
             if not SAVEFIG and outfig is None:
                 plt.show()
@@ -257,8 +328,11 @@ TPCF_sliced_3040 = TPCF_emulator(
 )
 
 # SAVEFIG = True
-outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
-TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, legend=True, outfig=f"{outfig_stem}.png")
-TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, legend=True, outfig=f"{outfig_stem}.pdf")
+# outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, legend=True, outfig=f"{outfig_stem}.png")
+# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, nodes_per_simulation=1, legend=True, outfig=f"{outfig_stem}.pdf")
+
+# TPCF_sliced_3040.get_rel_err_all(2)
+TPCF_sliced_3040.plot_proj_corrfunc(2, rel_err_statistics=True)
 
 
