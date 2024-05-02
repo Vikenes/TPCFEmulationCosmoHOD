@@ -1,8 +1,7 @@
 import numpy as np
 from pathlib import Path
-from datetime import datetime 
 import h5py
-import os 
+import pandas as pd 
 from typing import List, Optional, Union
 import sys 
 sys.path.append("../emul_utils")
@@ -31,6 +30,8 @@ PRESENTATION    = False
 dataset_names = {"train": "Training", "val": "Validation", "test": "Test"}
 
 D13_DATA_PATH = Path("/mn/stornext/d13/euclid_nobackup/halo/AbacusSummit/emulation_files") 
+FIDUCIAL_PATH = Path("/mn/stornext/d13/euclid_nobackup/halo/AbacusSummit/emulation_files/fiducial_data")
+
 
 class cm_emulator_class:
     def __init__(
@@ -85,6 +86,7 @@ class TPCF_emulator:
             self.simulation_keys = [key for key in fff.keys() if key.startswith("AbacusSummit")]
             self.N_simulations   = len(self.simulation_keys)
             max_r = np.floor(fff[self.simulation_keys[0]]["node0"][self.r_key][-1])
+            self.r_default = fff[self.simulation_keys[0]]["node0"][self.r_key][...]
         self.N_nodes_per_simulation = {
             "test": 100,
             "val": 100,
@@ -184,6 +186,106 @@ class TPCF_emulator:
             print(f" - Saving {fnames[key]}")
             np.save(fnames[key], rel_err_statistics[key])
             
+
+    def plot_proj_corrfunc_varying_omega_b_and_kappa(
+            self, 
+            versions:          Union[List[int], range, str] = "all",
+            legend:                 bool    = True,
+            outfigs:                str     = None,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
+        if type(versions) == list or type(versions) == range:
+            version_list = versions
+        elif type(versions) == int:
+            version_list = [versions]
+        else:
+            version_list = range(self.N_versions)
+
+
+        fiducial_HOD_params     = pd.read_csv(f"{FIDUCIAL_PATH}/HOD_parameters_fiducial.csv").iloc[0].to_dict()
+        fiducial_cosmo_params   = pd.read_csv(f"{FIDUCIAL_PATH}/cosmological_parameters.dat", sep=" ").iloc[0].to_dict()
+
+        fiducial_params_dict = {**fiducial_cosmo_params, **fiducial_HOD_params}
+        kappas   = [0.46, fiducial_params_dict["kappa"], 0.56]
+        omega_bs = [0.021, fiducial_params_dict["wb"], 0.024]
+        params_list = [kappas, omega_bs]
+
+        fiducial_params_kappa = np.zeros((len(kappas), len(self.param_names)))
+        fiducial_params_omega_b = np.zeros((len(omega_bs), len(self.param_names)))
+        for ii in range(3):
+            for jj, param_name in enumerate(self.param_names):
+                if param_name == "kappa":
+                    fiducial_params_kappa[ii, jj] = kappas[ii]
+                else:
+                    fiducial_params_kappa[ii, jj] = fiducial_params_dict[param_name]
+
+                if param_name == "wb":
+                    fiducial_params_omega_b[ii, jj] = omega_bs[ii]
+                else:
+                    fiducial_params_omega_b[ii, jj] = fiducial_params_dict[param_name]
+
+        param_sets = [fiducial_params_kappa, fiducial_params_omega_b] 
+        param_legends = [r"$\kappa$", r"$\Omega_b$"]
+        colors = ["red", "blue", "green"]
+        ls_ = ["dashed", "solid", "dashed"]
+
+        for vv in version_list:
+
+            _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
+
+            fig = plt.figure(figsize=(14, 7))
+            gs = gridspec.GridSpec(1, 2, wspace=0)
+            plt.rc('axes', prop_cycle=custom_cycler)
+            ax0_ = plt.subplot(gs[0])
+            ax1_ = plt.subplot(gs[1])
+
+            for ii, param_set in enumerate(param_sets):  
+                ax0 = plt.subplot(gs[ii])
+                # ax0.set_prop_cycle(custom_cycler)
+                # Load emulator for this version
+                for jj, params in enumerate(param_set):
+
+                    params_batch   = np.column_stack(
+                        (np.vstack(
+                            [params] * len(self.r_default)
+                            )
+                            , self.r_default
+                            ))
+                    
+                    # xi_data = fff_cosmo_HOD[self.xi_key][...]
+                    xi_emul = _emulator(params_batch) 
+                    # wp_data = self.compute_wp_from_xi_of_r(xi_data, r_data)
+                    wp_emul = self.compute_wp_from_xi_of_r(xi_emul, self.r_default)
+                    ax0.plot(self.r_perp, self.r_perp * wp_emul, linewidth=1, alpha=1, color=colors[jj], ls=ls_[jj], label=f"{param_legends[ii]} = {params_list[ii][jj]:.3f}")
+                    # ax0.plot(self.r_perp,wp_emul, linewidth=1, alpha=1, color=colors[jj], ls=ls_[jj], label=f"{param_legends[ii]} = {params[0]:.3f}")
+
+                # ax0.xaxis.set_ticklabels([])
+                ax0.set_xscale("log")
+                ax0.set_ylim([95,210])
+                # Increase size of tick labels 
+                ax0.tick_params(axis='both', which='major', labelsize=20)
+                ax0.set_xlabel(r'$\displaystyle  r_\bot \quad [h^{-1} \mathrm{Mpc}]$',fontsize=25)
+                if legend:
+                    ax0.legend(loc="lower left", fontsize=22)
+            ylabel =  r"$r_\bot w_p(r_\bot)\quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
+            ax1_.yaxis.set_ticklabels([])
+
+            ax0_.set_ylabel(ylabel,fontsize=25)
+            
+            for outfig in outfigs:
+                print(f'save plot to {outfig}')
+                plt.savefig(
+                    Path(outfig),
+                    dpi=150 if outfig.endswith(".png") else None,
+                    bbox_inches="tight",
+                    pad_inches=0.05,        
+                )
+            plt.close(fig)
+
 
     def plot_proj_corrfunc(
             self, 
@@ -341,12 +443,25 @@ TPCF_sliced_3040 = TPCF_emulator(
     flag                =   "test",
 )
 
-SAVEFIG = True
+SAVEFIG = False
 # TPCF_sliced_3040.get_rel_err_all(2, percentile=68, overwrite=True)
-outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
-TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
-TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
+def plot_wp():
+    outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+    TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
+    TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
 
-# TPCF_sliced_3040.plot_proj_corrfunc(2, rel_err_statistics=True)
+def test_omega_b_and_kappa():
+    outfig_stem = f"plots/thesis_figures/emulators/wp_emul"
+    outfig1 = f"{outfig_stem}_varying_kappa_and_omega_b.png"
+    outfig2 = f"{outfig_stem}_varying_kappa_and_omega_b.pdf"
+
+    # outfig2 = f"{outfig_stem}_varying_omega_b.png"
+    TPCF_sliced_3040.plot_proj_corrfunc_varying_omega_b_and_kappa(versions=2, legend=True, outfigs=[outfig1, outfig2])
+    # TPCF_sliced_3040.plot_proj_corrfunc_varying_omega_b_and_kappa(versions=2, legend=True, outfigs=None)
+
+    # outfig1 = f"{outfig_stem}_varying_kappa.pdf"
+    # outfig2 = f"{outfig_stem}_varying_omega_b.pdf"
+    # TPCF_sliced_3040.plot_proj_corrfunc_varying_omega_b_and_kappa(versions=2, legend=True, outfigs=[outfig1, outfig2])
 
 
+test_omega_b_and_kappa()
