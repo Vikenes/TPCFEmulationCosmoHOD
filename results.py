@@ -463,7 +463,7 @@ class TPCF_emulator:
                     y_emul = xi_emul * r_data**r_power
 
 
-                    ax0.plot(r_data, y_data , linewidth=0,   alpha=1, marker='o', markersize=1)
+                    ax0.plot(r_data, y_data , linewidth=0,   alpha=1, marker='o', markersize=1.5)
                     ax0.plot(r_data, y_emul , linewidth=1,   alpha=1)
                     ax1.plot(r_data, rel_err, linewidth=0.7, alpha=0.5, color="gray")
             for i in range(1, 4):
@@ -516,12 +516,12 @@ class TPCF_emulator:
                 if r_power == 0:
                     ax0.set_ylabel(r"$\xi^R(r)$",fontsize=22)
                 elif r_power == 1:
-                    ax0.set_ylabel(r"$r \xi^R(r)\:[h^{-1}\mathrm{Mpc}]$",fontsize=22)
+                    ax0.set_ylabel(r"$r \xi^R(r)\quad [h^{-1}\mathrm{Mpc}]$",fontsize=22)
                 elif r_power == 2:
-                    ax0.set_ylabel(r"$r \xi^R(r)\:[h^{-2}\mathrm{Mpc}^2]$",fontsize=22)
+                    ax0.set_ylabel(r"$r^2 \xi^R(r)\quad [h^{-2}\mathrm{Mpc}^2]$",fontsize=22)
                 else:
                     ax0.set_ylabel(rf"$r^{{{r_power}}}\xi_{{gg}}(r)$",fontsize=22)
-                ax1.set_xlabel(r'$\displaystyle  r \:  [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+                ax1.set_xlabel(r'$\displaystyle  r \quad   [h^{-1} \mathrm{Mpc}]$',fontsize=18)
                 ax1.set_ylabel(r'$\displaystyle \left|\frac{\xi^R_\mathrm{pred} - \xi^R_\mathrm{data}}{\xi^R_\mathrm{pred}}\right|$',fontsize=15)
 
 
@@ -575,7 +575,7 @@ TPCF_sliced_3040 = TPCF_emulator(
     print_config_param  =   ["batch_size", "hidden_dims", "stopping_patience"],
 )
 def plot_xi():
-    r_powers = [1, 2]
+    r_powers = [2]
     for r_power in r_powers:
         outfig = f"plots/thesis_figures/emulators/r_power_{r_power}_xi_{TPCF_sliced_3040.flag}"
         outfig_pdf = f"{outfig}.pdf"
@@ -584,12 +584,12 @@ def plot_xi():
         TPCF_sliced_3040.plot_tpcf(versions=2, r_power=r_power, rel_err_statistics=True, outfig=outfig_png)
 def print_xi_err():
     TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, overwrite=False)
-    TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, min_r_error=0.1, max_r_error=60, overwrite=True)
+    TPCF_sliced_3040.print_tpcf_errors(versions=2, print_individual=True, print_params=False, min_r_error=0.1, max_r_error=60, overwrite=False)
 
 
 
 # print_xi_err()
-# plot_xi()
+plot_xi()
 # TPCF_sliced_3040.get_rel_err_all(version=2)
-# TPCF_sliced_3040.plot_tpcf(2, rel_err_statistics=True)
+# TPCF_sliced_3040.plot_tpcf(2, rel_err_statistics=True, r_power=2, outfig="plots/thesis_figures/emulators/test.png")
 

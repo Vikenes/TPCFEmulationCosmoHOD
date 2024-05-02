@@ -295,10 +295,10 @@ class TPCF_emulator:
 
 
 
-            ylabel =  r"$r_\bot w_p(r_\bot)\:[h^{-2}\,\mathrm{Mpc}^{2}]$"
+            ylabel =  r"$r_\bot w_p(r_\bot)\quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
 
 
-            ax1.set_xlabel(r'$\displaystyle  r_\bot \: [h^{-1} \mathrm{Mpc}]$',fontsize=18)
+            ax1.set_xlabel(r'$\displaystyle  r_\bot \quad [h^{-1} \mathrm{Mpc}]$',fontsize=18)
             ax0.set_ylabel(ylabel,fontsize=22)
             ax1.set_ylabel(r'$\displaystyle \left|\frac{w_p^\mathrm{pred} - w_p^\mathrm{data}}{w_p^\mathrm{pred}}\right|$',fontsize=15)
 
