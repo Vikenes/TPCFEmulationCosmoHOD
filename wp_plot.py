@@ -30,6 +30,8 @@ PRESENTATION    = False
 
 dataset_names = {"train": "Training", "val": "Validation", "test": "Test"}
 
+D13_DATA_PATH = Path("/mn/stornext/d13/euclid_nobackup/halo/AbacusSummit/emulation_files") 
+
 class cm_emulator_class:
     def __init__(
             self, 
@@ -120,6 +122,7 @@ class TPCF_emulator:
             self, 
             version:                int,
             percentile:             float = 68,
+            overwrite:              bool = False,
             ):
         """
         nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
@@ -131,9 +134,14 @@ class TPCF_emulator:
 
         outfname_stem   = f"./rel_errors/v{version}_{flag}_wp"
         statistics      = ["mean", "median", "stddev", f"{percentile}percentile"]
-        fnames          = {
-            stat: Path(f"{outfname_stem}_{stat}.npy") for stat in statistics if not Path(f"{outfname_stem}_{stat}.npy").exists()
-        }
+        if overwrite:
+            fnames = {
+                stat: Path(f"{outfname_stem}_{stat}.npy") for stat in statistics
+            }
+        else:
+            fnames          = {
+                stat: Path(f"{outfname_stem}_{stat}.npy") for stat in statistics if not Path(f"{outfname_stem}_{stat}.npy").exists()
+            }
         # Check if fnames is empty
         if not fnames:
             print("All files exist. Exiting.")
@@ -158,9 +166,11 @@ class TPCF_emulator:
                         , r_data
                         ))
 
-                xi_data                 = fff_cosmo_HOD[self.xi_key][...]
                 xi_emul                 = _emulator(params_batch)
-                wp_data                 = self.compute_wp_from_xi_of_r(xi_data, r_data)
+
+                wp_fff = h5py.File(D13_DATA_PATH / f"{simulation_key}/wp_data/wp_{flag}.hdf5", 'r')
+                wp_data     = wp_fff[f"node{jj}"]["wp"][...]
+                wp_fff.close()
                 wp_emul                 = self.compute_wp_from_xi_of_r(xi_emul, r_data)
                 rel_err_arr_[ii, jj, :] = np.abs(wp_emul / wp_data - 1.0)
                
@@ -223,7 +233,7 @@ class TPCF_emulator:
             _emulator       = cm_emulator_class(version=vv,LIGHTING_LOGS_PATH=self.emul_dir)
 
 
-            for simulation_key in self.simulation_keys:                
+            for simulation_key in self.simulation_keys:  
                 fff_cosmo = fff[simulation_key]
 
                 for jj in nodes_idx[simulation_key]:
@@ -237,14 +247,19 @@ class TPCF_emulator:
                             , r_data
                             ))
                     
-                    xi_data = fff_cosmo_HOD[self.xi_key][...]
+                    # xi_data = fff_cosmo_HOD[self.xi_key][...]
                     xi_emul = _emulator(params_batch) 
-                    wp_data = self.compute_wp_from_xi_of_r(xi_data, r_data)
+                    # wp_data = self.compute_wp_from_xi_of_r(xi_data, r_data)
+                    wp_fff = h5py.File(D13_DATA_PATH / f"{simulation_key}/wp_data/wp_{flag}.hdf5", 'r')
+                    wp_data     = wp_fff[f"node{jj}"]["wp"][...]
+                    r_perp_data  = wp_fff[f"node{jj}"]["r_perp"][...]
+                    wp_fff.close()
+
                     wp_emul = self.compute_wp_from_xi_of_r(xi_emul, r_data)
 
                     rel_err = np.abs(wp_emul / wp_data - 1.0) 
 
-                    ax0.plot(self.r_perp, self.r_perp * wp_data, linewidth=0, marker="o",  markersize=2, alpha=1)
+                    ax0.plot(r_perp_data, r_perp_data * wp_data, linewidth=0, marker="o",  markersize=1.5, alpha=1)
                     ax0.plot(self.r_perp, self.r_perp * wp_emul, linewidth=1, alpha=1)
                     ax1.plot(self.r_perp, rel_err, linewidth=0.7, alpha=0.5, color="gray")
             for i in range(1, 4):
@@ -301,12 +316,13 @@ class TPCF_emulator:
                 plt.show()
             
             else:
-
                 if outfig is None:
                     figdir = self.fig_dir
                     figdir.mkdir(parents=True, exist_ok=True)
                     figtitle = f"version{vv}_wp.png"
                     outfig = f"{figdir}/{figtitle}"
+
+                
                 plt.savefig(
                     Path(outfig),
                     dpi=150 if outfig.endswith(".png") else None,
@@ -325,11 +341,11 @@ TPCF_sliced_3040 = TPCF_emulator(
     flag                =   "test",
 )
 
-# SAVEFIG = True
-# TPCF_sliced_3040.get_rel_err_all(2)
-# outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
-# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
-# TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
+SAVEFIG = True
+# TPCF_sliced_3040.get_rel_err_all(2, percentile=68, overwrite=True)
+outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
+TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
 
 # TPCF_sliced_3040.plot_proj_corrfunc(2, rel_err_statistics=True)
 
