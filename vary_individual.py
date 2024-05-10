@@ -147,15 +147,119 @@ class TPCF_emulator:
     def get_min_fid_max(
             self, 
             param_name, 
-            prior_factor=0.01
+            min_prior_factor=0.01,
+            max_prior_factor=0.01,
             ):
+            if PRIORS_DICT[param_name][0] < 0:
+                min_prior_factor = -min_prior_factor
+            if PRIORS_DICT[param_name][-1] < 0:
+                max_prior_factor = -max_prior_factor
             return np.array([
-                PRIORS_DICT[param_name][0] * (1 + prior_factor), 
+                PRIORS_DICT[param_name][0] * (1 + min_prior_factor), 
                 FIDUCIAL_DICT[param_name], 
-                PRIORS_DICT[param_name][-1] * (1 - prior_factor),
+                PRIORS_DICT[param_name][-1] * (1 - max_prior_factor),
                 ])
     
 
+    def plot_proj_corrfunc_vary_w0_wa(
+            self, 
+            varying_param_keys:     List[str],
+            version:                int     = 2,
+            legend:                 bool    = True,
+            outfig_stem:            str     = None,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
+        varying_param_values = {}
+        emul_param_inputs = {}
+        for param_key in varying_param_keys:
+            if param_key == "w0":
+                param_values = self.get_min_fid_max(param_key, max_prior_factor=0.1)
+                param_values = np.concatenate((param_values, [-0.7]))
+            else:
+                param_values = self.get_min_fid_max(param_key)
+            varying_param_values[param_key] = param_values
+            emul_param_inputs[param_key] = np.array(
+                [[FIDUCIAL_DICT[key] if key != param_key else param_values[i] for key in self.param_names] for i in range(len(param_values))])
+        
+        colors          = {
+            "wa": ["red", "blue", "green"],
+            "w0": ["red", "blue", "green", "black"],
+        }
+        ls_             = {
+            "wa": ["dashed", "solid", "dashed"],
+            "w0": ["dashed", "solid", "dashed", "solid"]
+        }
+
+        alphas          = {
+            "wa": [0.7, 1, 0.7],
+            "w0": [0.7, 1, 0.7, 0.7]
+        }
+
+        _emulator       = cm_emulator_class(version=version,LIGHTING_LOGS_PATH=self.emul_dir)
+
+        fig = plt.figure(figsize=(14, 7))
+        gs = gridspec.GridSpec(1, 2, wspace=0)
+        plt.rc('axes', prop_cycle=custom_cycler)
+        ax0_ = plt.subplot(gs[0])
+        ax1_ = plt.subplot(gs[1])
+
+        for ii, param_key in enumerate(varying_param_keys):  
+            ax0 = plt.subplot(gs[ii])
+            for jj, params in enumerate(emul_param_inputs[param_key]):
+
+                params_batch   = np.column_stack(
+                    (np.vstack(
+                        [params] * len(self.r_default)
+                        )
+                        , self.r_default
+                        ))
+                
+                xi_emul = _emulator(params_batch) 
+                wp_emul = self.compute_wp_from_xi_of_r(xi_emul, self.r_default)
+                ax0.plot(
+                    self.r_perp, 
+                    self.r_perp * wp_emul, 
+                    linewidth=1, 
+                    alpha=alphas[param_key][jj], 
+                    color=colors[param_key][jj], 
+                    ls=ls_[param_key][jj], 
+                    label=rf"${PARAM_LABELS[param_key]} = {varying_param_values[param_key][jj]:.3f}$")
+
+            ax0.set_xscale("log")
+            ax0.set_ylim([95,250])
+            ax0.tick_params(axis='both', which='major', labelsize=20)
+            ax0.set_xlabel(r'$\displaystyle  r_\bot \quad [h^{-1} \mathrm{Mpc}]$',fontsize=25)
+            if legend:
+                ax0.legend(loc="upper left", fontsize=18)
+        ylabel =  r"$r_\bot w_p(r_\bot)\quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
+        ax1_.yaxis.set_ticklabels([])
+
+        ax0_.set_ylabel(ylabel,fontsize=25, labelpad=10)
+
+        if not SAVEFIG:
+            plt.tight_layout()
+            plt.show()
+            return 
+        outfig_png = Path(f"{outfig_stem}.png")
+        outfig_pdf = Path(f"{outfig_stem}.pdf")
+        print(f'Saving {outfig_png}')
+        plt.savefig(
+            outfig_png,
+            dpi=150,
+            bbox_inches="tight",
+            pad_inches=0.05,
+        )
+        print(f'Saving {outfig_pdf}')
+        plt.savefig(
+            outfig_pdf,
+            bbox_inches="tight",
+            pad_inches=0.05,
+        )
+        plt.close(fig)
 
 
     def plot_proj_corrfunc_vary_two_params(
@@ -290,11 +394,9 @@ class TPCF_emulator:
         ax2_ = plt.subplot(gs[2])
         ax3_ = plt.subplot(gs[3])
 
-        # for ii, param_set in enumerate(param_sets):  
         for ii, param_key in enumerate(varying_param_keys):
 
             ax = plt.subplot(gs[ii])
-            # for jj, params in enumerate(param_set):
             for jj, params in enumerate(emul_param_inputs[param_key]):
 
                 params_batch   = np.column_stack(
@@ -365,21 +467,27 @@ SAVEFIG = False
 # SAVEFIG = True
 
 def test_omega_b_and_kappa():
-    outfig_stem = f"plots/thesis_figures/emulators/wp_emul"
+    outfig_stem = f"plots/thesis_figures/emulators/wp_emul_varying_kappa_and_omega_b"
     TPCF_sliced_3040.plot_proj_corrfunc_vary_two_params(
         varying_param_keys=["wb", "kappa"],
-        legend=True, 
         outfig_stem=outfig_stem
         )
 
 def test_omega_c_and_sigma8():
-    outfig_stem = f"plots/thesis_figures/emulators/wp_emul"
+    outfig_stem = f"plots/thesis_figures/emulators/wp_emul_varying_sigma8_and_omega_cdm"
     TPCF_sliced_3040.plot_proj_corrfunc_vary_two_params(
         varying_param_keys=["wc", "sigma8"],
-        legend=True, 
         outfig_stem=outfig_stem
         )
     
+
+def test_ns_and_alpha_s():
+    outfig_stem = f"plots/thesis_figures/emulators/wp_emul_varying_ns_and_alpha_s"
+    TPCF_sliced_3040.plot_proj_corrfunc_vary_two_params(
+        varying_param_keys=["ns", "alpha_s"],
+        outfig_stem=outfig_stem
+        )
+
 def vary_four():
     TPCF_sliced_3040.plot_proj_corrfunc_vary_four_parameters(
         varying_param_keys=[
@@ -391,6 +499,15 @@ def vary_four():
         outfig_stem = "plots/thesis_figures/emulators/wp_emul_varying_kappa_wb_wc_sigma8"
         )
     
+def test_w0_wa():
+    TPCF_sliced_3040.plot_proj_corrfunc_vary_w0_wa(
+        varying_param_keys=["w0","wa",], 
+        outfig_stem = "plots/thesis_figures/emulators/wp_emul_varying_w0_wa"
+        )
+    
 # test_omega_b_and_kappa()
 # test_omega_c_and_sigma8()
+# test_ns_and_alpha_s()
+# test_w0_wa()
 # vary_four()
+# print(PRIORS_DICT["alpha_s"])
