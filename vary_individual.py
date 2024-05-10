@@ -399,6 +399,7 @@ class TPCF_emulator:
                 # param_values = self.get_min_fid_max(param_key, max_prior_factor=0.01)
                 param_values = np.array([
                     PRIORS_DICT["log10_ng"][0],
+                    -3.681270,
                     PRIORS_DICT["log10_ng"][0] * (1 - 0.05),
                     FIDUCIAL_DICT["log10_ng"],
                 ])
@@ -406,6 +407,7 @@ class TPCF_emulator:
             elif param_key == "log10_ng_high":
                 param_values = np.array([
                     PRIORS_DICT["log10_ng"][-1],
+                    -3.212319,
                     PRIORS_DICT["log10_ng"][-1] * (1 + 0.05),
                     FIDUCIAL_DICT["log10_ng"],
                 ])
@@ -417,17 +419,17 @@ class TPCF_emulator:
                 [[FIDUCIAL_DICT[key] if key != "log10_ng" else param_values[i] for key in self.param_names] for i in range(len(param_values))])
         
         colors          = {
-            "log10_ng_low": ["black", "red", "blue",],
-            "log10_ng_high": ["black", "green", "blue"],
+            "log10_ng_low": ["black", "red", "green", "blue",],
+            "log10_ng_high": ["black", "red", "green", "blue"],
         }
         ls_             = {
-            "log10_ng_low": ["solid", "dashed", "solid"],
-            "log10_ng_high": ["solid", "dashed", "solid"]
+            "log10_ng_low": ["dashed", "dashed", "dashed", "solid"],
+            "log10_ng_high": ["dashed", "dashed", "dashed", "solid"]
         }
 
         alphas          = {
-            "log10_ng_low":  [1, 0.7, 0.7],
-            "log10_ng_high": [1, 0.7, 0.7],
+            "log10_ng_low":  [0.7, 0.7, 0.7, 1],
+            "log10_ng_high": [0.7, 0.7, 0.7, 1],
         }
 
         _emulator       = cm_emulator_class(version=version,LIGHTING_LOGS_PATH=self.emul_dir)
@@ -499,6 +501,8 @@ class TPCF_emulator:
             self, 
             varying_param_keys:     List[str],
             version:                int     = 2,
+            min_prior_factor:       float   = 0.01,
+            max_prior_factor:       float   = 0.01,
             legend:                 bool    = True,
             outfig_stem:            str     = None,
             ):
@@ -511,7 +515,7 @@ class TPCF_emulator:
         varying_param_values = {}
         emul_param_inputs = {}
         for param_key in varying_param_keys:
-            param_values = self.get_min_fid_max(param_key)
+            param_values = self.get_min_fid_max(param_key, min_prior_factor=min_prior_factor, max_prior_factor=max_prior_factor)
             varying_param_values[param_key] = param_values
             emul_param_inputs[param_key] = np.array([[FIDUCIAL_DICT[key] if key != param_key else param_values[i] for key in self.param_names] for i in range(3)])
 
@@ -558,6 +562,7 @@ class TPCF_emulator:
             ax0.set_xlabel(r'$\displaystyle  r_\bot \quad [h^{-1} \mathrm{Mpc}]$',fontsize=25)
             if legend:
                 ax0.legend(loc="upper left", fontsize=18)
+
         ylabel =  r"$r_\bot w_p(r_\bot)\quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
         ax1_.yaxis.set_ticklabels([])
 
@@ -739,10 +744,10 @@ def test_w0_wa():
         )
     
 def test_ng():
-    TPCF_sliced_3040.plot_proj_corrfunc_vary_log10_ng_xi(
-        # outfig_stem="plots/test_ng_xi"
-        outfig_stem = "plots/thesis_figures/emulators/xi_emul_varying_log10_ng"
-    )
+    # TPCF_sliced_3040.plot_proj_corrfunc_vary_log10_ng_xi(
+    #     # outfig_stem="plots/test_ng_xi"
+    #     outfig_stem = "plots/thesis_figures/emulators/xi_emul_varying_log10_ng"
+    # )
     TPCF_sliced_3040.plot_proj_corrfunc_vary_log10_ng(
         outfig_stem = "plots/thesis_figures/emulators/wp_emul_varying_log10_ng"
         # outfig_stem = "plots/test_ng_wp"
