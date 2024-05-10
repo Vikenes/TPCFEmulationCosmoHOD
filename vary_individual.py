@@ -45,17 +45,21 @@ FIDUCIAL_DICT   = {**FIDUCIAL_HOD, **FIDUCIAL_COSMO}
 PRIORS_DICT     = {**HOD_PRIORS, **COSMO_PRIORS}
 
 PARAM_LABELS = {
-            "wc"        : r"\omega_\mathrm{cdm}", 
-            "wb"        : r"\omega_b", 
-            "kappa"     : r"\kappa", 
-            "sigma8"    : r"\sigma_8",
-            "w0"        : r"w_0",
-            "wa"        : r"w_a",
-            "ns"        : r"n_s",
-            "alpha_s"   : r"\mathrm{d}n_s/\mathrm{d}\ln{k}",
-            "N_eff"     : r"N_\mathrm{eff}",
+            "wc"         : r"\omega_\mathrm{cdm}", 
+            "wb"         : r"\omega_b", 
+            "kappa"      : r"\kappa", 
+            "sigma8"     : r"\sigma_8",
+            "w0"         : r"w_0",
+            "wa"         : r"w_a",
+            "ns"         : r"n_s",
+            "alpha_s"    : r"\mathrm{d}n_s/\mathrm{d}\ln{k}",
+            "N_eff"      : r"N_\mathrm{eff}",
+            "log10M1"    : r"\log{M_1}",
+            "sigma_logM" : r"\sigma_{\log{M}}",
+            "kappa"      : r"\kappa",
+            "alpha"      : r"\alpha",
+            "log10_ng"   : r"\log{n_g}",
             }
-
 
 class cm_emulator_class:
     def __init__(
@@ -235,6 +239,235 @@ class TPCF_emulator:
             ax0.set_xlabel(r'$\displaystyle  r_\bot \quad [h^{-1} \mathrm{Mpc}]$',fontsize=25)
             if legend:
                 ax0.legend(loc="upper left", fontsize=18)
+        ylabel =  r"$r_\bot w_p(r_\bot)\quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
+        ax1_.yaxis.set_ticklabels([])
+
+        ax0_.set_ylabel(ylabel,fontsize=25, labelpad=10)
+
+        if not SAVEFIG:
+            plt.tight_layout()
+            plt.show()
+            return 
+        outfig_png = Path(f"{outfig_stem}.png")
+        outfig_pdf = Path(f"{outfig_stem}.pdf")
+        print(f'Saving {outfig_png}')
+        plt.savefig(
+            outfig_png,
+            dpi=150,
+            bbox_inches="tight",
+            pad_inches=0.05,
+        )
+        print(f'Saving {outfig_pdf}')
+        plt.savefig(
+            outfig_pdf,
+            bbox_inches="tight",
+            pad_inches=0.05,
+        )
+        plt.close(fig)
+
+
+    def plot_proj_corrfunc_vary_log10_ng_xi(
+            self, 
+            varying_param_keys:     List[str] = ["log10_ng_low", "log10_ng_high"],
+            version:                int     = 2,
+            legend:                 bool    = True,
+            outfig_stem:            str     = None,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
+        varying_param_values = {}
+        emul_param_inputs = {}
+        for param_key in varying_param_keys:
+            if param_key == "log10_ng_low":
+                # param_values = self.get_min_fid_max(param_key, max_prior_factor=0.01)
+                param_values = np.array([
+                    PRIORS_DICT["log10_ng"][0],
+                    PRIORS_DICT["log10_ng"][0] * (1 - 0.05),
+                    FIDUCIAL_DICT["log10_ng"],
+                ])
+                # param_values = np.concatenate((param_values, [PRIORS_DICT["log10_ng"][-1]]))
+            elif param_key == "log10_ng_high":
+                param_values = np.array([
+                    PRIORS_DICT["log10_ng"][-1],
+                    PRIORS_DICT["log10_ng"][-1] * (1 + 0.05),
+                    FIDUCIAL_DICT["log10_ng"],
+                ])
+                # param_values = self.get_min_fid_max(param_key, max_prior_factor=0.01)
+                # param_values = np.concatenate((param_values, [PRIORS_DICT["sigma_logM"][-1]]))
+                # param_values = self.get_min_fid_max(param_key)
+            varying_param_values[param_key] = param_values
+            emul_param_inputs[param_key] = np.array(
+                [[FIDUCIAL_DICT[key] if key != "log10_ng" else param_values[i] for key in self.param_names] for i in range(len(param_values))])
+        
+        colors          = {
+            "log10_ng_low": ["black", "red", "blue",],
+            "log10_ng_high": ["black", "green", "blue"],
+        }
+        ls_             = {
+            "log10_ng_low": ["solid", "dashed", "solid"],
+            "log10_ng_high": ["solid", "dashed", "solid"]
+        }
+
+        alphas          = {
+            "log10_ng_low":  [1, 0.7, 0.7],
+            "log10_ng_high": [1, 0.7, 0.7],
+        }
+
+        _emulator       = cm_emulator_class(version=version,LIGHTING_LOGS_PATH=self.emul_dir)
+
+        fig = plt.figure(figsize=(14, 7))
+        gs = gridspec.GridSpec(1, 2, wspace=0)
+        plt.rc('axes', prop_cycle=custom_cycler)
+        ax0_ = plt.subplot(gs[0])
+        ax1_ = plt.subplot(gs[1])
+
+        for ii, param_key in enumerate(varying_param_keys):  
+            ax0 = plt.subplot(gs[ii])
+            for jj, params in enumerate(emul_param_inputs[param_key]):
+
+                params_batch   = np.column_stack(
+                    (np.vstack(
+                        [params] * len(self.r_default)
+                        )
+                        , self.r_default
+                        ))
+                
+                xi_emul = _emulator(params_batch) 
+                ax0.plot(
+                    self.r_default, 
+                    self.r_default**2 * xi_emul,
+                    linewidth=1, 
+                    alpha=alphas[param_key][jj], 
+                    color=colors[param_key][jj], 
+                    ls=ls_[param_key][jj], 
+                    label=rf"${PARAM_LABELS['log10_ng']} = {varying_param_values[param_key][jj]:.3f}$")
+                # ax0.set_yscale("log")
+
+            ax0.set_xscale("log")
+            ax0.tick_params(axis='both', which='major', labelsize=20)
+            ax0.set_xlabel(r'$\displaystyle  r \quad [h^{-1} \mathrm{Mpc}]$',fontsize=25)
+        if legend:
+            ax0_.legend(loc="lower left", fontsize=18)
+            ax1_.legend(loc="upper left", fontsize=18)
+
+        ylabel =  r"$r^2 \xi^R \quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
+        ax1_.yaxis.set_ticklabels([])
+
+        ax0_.set_ylabel(ylabel,fontsize=25, labelpad=10)
+
+        if not SAVEFIG:
+            plt.tight_layout()
+            plt.show()
+            return 
+        outfig_png = Path(f"{outfig_stem}.png")
+        outfig_pdf = Path(f"{outfig_stem}.pdf")
+        print(f'Saving {outfig_png}')
+        plt.savefig(
+            outfig_png,
+            dpi=150,
+            bbox_inches="tight",
+            pad_inches=0.05,
+        )
+        print(f'Saving {outfig_pdf}')
+        plt.savefig(
+            outfig_pdf,
+            bbox_inches="tight",
+            pad_inches=0.05,
+        )
+        plt.close(fig)
+
+
+    def plot_proj_corrfunc_vary_log10_ng(
+            self, 
+            varying_param_keys:     List[str] = ["log10_ng_low", "log10_ng_high"],
+            version:                int     = 2,
+            legend:                 bool    = True,
+            outfig_stem:            str     = None,
+            ):
+        """
+        nodes_per_simulation: Number of nodes (HOD parameter sets) to plot per simulation (cosmology) 
+        masker_r: if True, only plot r < max_r_error. Noisy data for r > 60.
+        xi_ratio: if True, plot xi/xi_fiducial of xi.  
+        """
+        varying_param_values = {}
+        emul_param_inputs = {}
+        for param_key in varying_param_keys:
+            if param_key == "log10_ng_low":
+                # param_values = self.get_min_fid_max(param_key, max_prior_factor=0.01)
+                param_values = np.array([
+                    PRIORS_DICT["log10_ng"][0],
+                    PRIORS_DICT["log10_ng"][0] * (1 - 0.05),
+                    FIDUCIAL_DICT["log10_ng"],
+                ])
+                # param_values = np.concatenate((param_values, [PRIORS_DICT["log10_ng"][-1]]))
+            elif param_key == "log10_ng_high":
+                param_values = np.array([
+                    PRIORS_DICT["log10_ng"][-1],
+                    PRIORS_DICT["log10_ng"][-1] * (1 + 0.05),
+                    FIDUCIAL_DICT["log10_ng"],
+                ])
+                # param_values = self.get_min_fid_max(param_key, max_prior_factor=0.01)
+                # param_values = np.concatenate((param_values, [PRIORS_DICT["sigma_logM"][-1]]))
+                # param_values = self.get_min_fid_max(param_key)
+            varying_param_values[param_key] = param_values
+            emul_param_inputs[param_key] = np.array(
+                [[FIDUCIAL_DICT[key] if key != "log10_ng" else param_values[i] for key in self.param_names] for i in range(len(param_values))])
+        
+        colors          = {
+            "log10_ng_low": ["black", "red", "blue",],
+            "log10_ng_high": ["black", "green", "blue"],
+        }
+        ls_             = {
+            "log10_ng_low": ["solid", "dashed", "solid"],
+            "log10_ng_high": ["solid", "dashed", "solid"]
+        }
+
+        alphas          = {
+            "log10_ng_low":  [1, 0.7, 0.7],
+            "log10_ng_high": [1, 0.7, 0.7],
+        }
+
+        _emulator       = cm_emulator_class(version=version,LIGHTING_LOGS_PATH=self.emul_dir)
+
+        fig = plt.figure(figsize=(14, 7))
+        gs = gridspec.GridSpec(1, 2, wspace=0)
+        plt.rc('axes', prop_cycle=custom_cycler)
+        ax0_ = plt.subplot(gs[0])
+        ax1_ = plt.subplot(gs[1])
+
+        for ii, param_key in enumerate(varying_param_keys):  
+            ax0 = plt.subplot(gs[ii])
+            for jj, params in enumerate(emul_param_inputs[param_key]):
+
+                params_batch   = np.column_stack(
+                    (np.vstack(
+                        [params] * len(self.r_default)
+                        )
+                        , self.r_default
+                        ))
+                
+                xi_emul = _emulator(params_batch) 
+                wp_emul = self.compute_wp_from_xi_of_r(xi_emul, self.r_default)
+                ax0.plot(
+                    self.r_perp, 
+                    self.r_perp * wp_emul, 
+                    linewidth=1, 
+                    alpha=alphas[param_key][jj], 
+                    color=colors[param_key][jj], 
+                    ls=ls_[param_key][jj], 
+                    label=rf"${PARAM_LABELS['log10_ng']} = {varying_param_values[param_key][jj]:.3f}$")
+
+            ax0.set_xscale("log")
+            ax0.set_ylim([95,250])
+            ax0.tick_params(axis='both', which='major', labelsize=20)
+            ax0.set_xlabel(r'$\displaystyle  r_\bot \quad [h^{-1} \mathrm{Mpc}]$',fontsize=25)
+        if legend:
+            ax0_.legend(loc="lower left", fontsize=18)
+            ax1_.legend(loc="upper left", fontsize=18)
+
         ylabel =  r"$r_\bot w_p(r_\bot)\quad [h^{-2}\,\mathrm{Mpc}^{2}]$"
         ax1_.yaxis.set_ticklabels([])
 
@@ -505,9 +738,21 @@ def test_w0_wa():
         outfig_stem = "plots/thesis_figures/emulators/wp_emul_varying_w0_wa"
         )
     
+def test_ng():
+    TPCF_sliced_3040.plot_proj_corrfunc_vary_log10_ng_xi(
+        # outfig_stem="plots/test_ng_xi"
+        outfig_stem = "plots/thesis_figures/emulators/xi_emul_varying_log10_ng"
+    )
+    TPCF_sliced_3040.plot_proj_corrfunc_vary_log10_ng(
+        outfig_stem = "plots/thesis_figures/emulators/wp_emul_varying_log10_ng"
+        # outfig_stem = "plots/test_ng_wp"
+        )
+    
+
 # test_omega_b_and_kappa()
 # test_omega_c_and_sigma8()
 # test_ns_and_alpha_s()
 # test_w0_wa()
+# test_ng()
 # vary_four()
 # print(PRIORS_DICT["alpha_s"])
