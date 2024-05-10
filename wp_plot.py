@@ -193,7 +193,7 @@ class TPCF_emulator:
             versions:          Union[List[int], range, str] = "all",
             nodes_per_simulation:   int     = 1,
             legend:                 bool    = True,
-            outfig:                 str     = None,
+            outfig_stem:            str     = None,
             percentile:             float   = 68,
             rel_err_statistics:     bool    = False,
             ):
@@ -279,8 +279,6 @@ class TPCF_emulator:
                 # All nodes have the same number of r-values
                 rel_err_mean        = np.load(f"./rel_errors/v{vv}_{flag}_wp_mean.npy")
                 rel_err_median      = np.load(f"./rel_errors/v{vv}_{flag}_wp_median.npy")
-                rel_err_stddev      = np.load(f"./rel_errors/v{vv}_{flag}_wp_stddev.npy")
-                rel_err_percentile  = np.load(f"./rel_errors/v{vv}_{flag}_wp_{percentile}percentile.npy")
             
                 # Plot shaded region for standard deviation
                 # ax1.fill_between(r_data, rel_err_mean - rel_err_stddev, rel_err_mean + rel_err_stddev, alpha=0.1, color='red', zorder=0)
@@ -294,7 +292,7 @@ class TPCF_emulator:
             ax0.set_yscale("log")
             ax1.set_xscale("log")
             ax1.set_yscale("log")
-            ax1.set_ylim([5e-4, 0.9e-1])
+            ax1.set_ylim([5e-4, 2e-1])
 
 
 
@@ -305,35 +303,43 @@ class TPCF_emulator:
             ax0.set_ylabel(ylabel,fontsize=22)
             ax1.set_ylabel(r'$\displaystyle \left|\frac{w_p^\mathrm{pred} - w_p^\mathrm{data}}{w_p^\mathrm{pred}}\right|$',fontsize=15)
 
-            # plot_title = f"Version {vv}. {dataset_names[flag]} data \n"
-            # plot_title += rf"Showing {nodes_per_simulation} sets of $\vec{{\mathcal{{G}}_i}}$ for all {self.N_simulations} sets of $\vec{{\mathcal{{C}}_j}}$"
-            # ax0.set_title(plot_title)
-
             ax0.plot([], linewidth=0, marker='o', color='k', markersize=2, alpha=0.5, label="Data")
             ax0.plot([], linewidth=1, color='k', alpha=1, label="Emulator")
             if legend:
                 ax0.legend(loc="upper right", fontsize=12)
-                ax1.legend(loc="upper left", fontsize=12)
+                leg1 = ax1.legend(loc="upper left", fontsize=12, framealpha=1, facecolor="white")
+                leg1.set_zorder(101)
 
-            if not SAVEFIG and outfig is None:
+            if not SAVEFIG:
                 plt.show()
-            
-            else:
-                if outfig is None:
-                    figdir = self.fig_dir
-                    figdir.mkdir(parents=True, exist_ok=True)
-                    figtitle = f"version{vv}_wp.png"
-                    outfig = f"{figdir}/{figtitle}"
+                return 
 
-                
-                plt.savefig(
-                    Path(outfig),
-                    dpi=150 if outfig.endswith(".png") else None,
-                    bbox_inches="tight",
-                    pad_inches=0.05,        
-                )
-                print(f'save plot to {outfig}')
-                plt.close(fig)
+            outfig_png = Path(f"{outfig_stem}.png")
+            outfig_pdf = Path(f"{outfig_stem}.pdf")
+            print(f'Saving {outfig_png}')
+            plt.savefig(
+                outfig_png,
+                dpi=150,
+                bbox_inches="tight",
+                pad_inches=0.05,
+            )
+            print(f'Saving {outfig_pdf}')
+            plt.savefig(
+                outfig_pdf,
+                bbox_inches="tight",
+                pad_inches=0.05,
+            )
+            plt.close(fig)
+            """
+            plt.savefig(
+                Path(outfig),
+                dpi=150 if outfig.endswith(".png") else None,
+                bbox_inches="tight",
+                pad_inches=0.05,        
+            )
+            print(f'save plot to {outfig}')
+            plt.close(fig)
+            """
 
         fff.close()
 
@@ -346,7 +352,5 @@ TPCF_sliced_3040 = TPCF_emulator(
 
 SAVEFIG = False
 # TPCF_sliced_3040.get_rel_err_all(2, percentile=68, overwrite=True)
-def plot_wp():
-    outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
-    TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.png")
-    TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig=f"{outfig_stem}.pdf")
+outfig_stem = f"plots/thesis_figures/emulators/wp_from_xi_{TPCF_sliced_3040.flag}"
+TPCF_sliced_3040.plot_proj_corrfunc(versions=2, rel_err_statistics=True, outfig_stem=outfig_stem)
