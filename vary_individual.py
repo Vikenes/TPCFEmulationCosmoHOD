@@ -400,7 +400,7 @@ class TPCF_emulator:
                 param_values = np.array([
                     PRIORS_DICT["log10_ng"][0],
                     -3.681270,
-                    PRIORS_DICT["log10_ng"][0] * (1 - 0.05),
+                    PRIORS_DICT["log10_ng"][0] * (1 - 0.03),
                     FIDUCIAL_DICT["log10_ng"],
                 ])
                 # param_values = np.concatenate((param_values, [PRIORS_DICT["log10_ng"][-1]]))
@@ -408,7 +408,7 @@ class TPCF_emulator:
                 param_values = np.array([
                     PRIORS_DICT["log10_ng"][-1],
                     -3.212319,
-                    PRIORS_DICT["log10_ng"][-1] * (1 + 0.05),
+                    PRIORS_DICT["log10_ng"][-1] * (1 + 0.03),
                     FIDUCIAL_DICT["log10_ng"],
                 ])
                 # param_values = self.get_min_fid_max(param_key, max_prior_factor=0.01)
