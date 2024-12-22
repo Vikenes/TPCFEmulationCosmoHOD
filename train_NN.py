@@ -23,6 +23,10 @@ from _nn_config import DataConfig, ModelConfig, TrainingConfig
 import _models
 
 
+"""
+See doc. at bottom to see list of modifications must be made, and which functions to run in which order. 
+"""
+
 logging.basicConfig(level=logging.INFO, format='%(message)s')
 
 # load configuration file
@@ -122,19 +126,29 @@ with open(scalers_path / "config.yaml", "w") as f:
     yaml.dump(config, f)
 
 
-### Train the model 
-print("Starting training")
-t0 = time.time()
+"""
+Modifications to make:
+    - At the top, use path correct Path to EmulationUtilities:
+        sys.path.append("Path/to/EmulationUtilities")
 
-# Perform training 
-trainer.fit(model=model, 
-            datamodule=data_module,
-            )
+Before running:
+    - Update the config.yaml file according to the description in the README.md
+"""
 
-    
-dur = time.time() - t0
-dur_str = f"{dur//3600:.0f}hrs {(dur%3600)//60:.0f}min {dur%60:.0f}sec"
-print(f"Model: {trainer.logger.log_dir} took {dur_str} to train")
 
-with open(scalers_path / "training_duration.txt", "w") as f:
-    f.write(f"{dur_str}\n")
+if __name__ == "__main__":
+    ### Train the model 
+    print("Starting training")
+    t0 = time.time()
+    # Perform training 
+    trainer.fit(model=model, 
+                datamodule=data_module,
+                )
+
+        
+    dur = time.time() - t0
+    dur_str = f"{dur//3600:.0f}hrs {(dur%3600)//60:.0f}min {dur%60:.0f}sec"
+    print(f"Model: {trainer.logger.log_dir} took {dur_str} to train")
+
+    with open(scalers_path / "training_duration.txt", "w") as f:
+        f.write(f"{dur_str}\n")

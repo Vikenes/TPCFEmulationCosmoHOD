@@ -9,6 +9,11 @@ The data is constructed from mock galaxy catalogues from different cosmological 
  - The `EmulationUtilities` repository. The path to this directory must be added to the header of all scripts in this directory to work.
  - Training data, generated with the script `HOD/HaloModel/HOD_and_cosmo_emulation/make_tpcf_emulation_data_files.py` from the `HOD` repository. 
 
+
+### emulator_data
+The `emulator_data` is a symlink to where data was previously stored. 
+If you change this symlink to a directory of your choice, almost all scripts will work with minimum modifications. 
+
 ### Things to ignore
 Some things are irrelevant/outdated. This includes:
  - `original_config.yaml`: Was used for a different task with an earlier version of `EmulationUtilities`. 
