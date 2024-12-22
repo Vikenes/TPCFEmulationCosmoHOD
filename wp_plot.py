@@ -4,7 +4,7 @@ import h5py
 import pandas as pd 
 from typing import List, Optional, Union
 import sys 
-sys.path.append("../emul_utils")
+sys.path.append("Path/to/EmulationUtilities")
 from _predict import Predictor
 
 import matplotlib.pyplot as plt

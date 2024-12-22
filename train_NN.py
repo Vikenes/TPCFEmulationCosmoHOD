@@ -17,7 +17,7 @@ import ctypes
 ligbcc_s = ctypes.CDLL("libgcc_s.so.1")
 
 import sys 
-sys.path.append("../emul_utils")
+sys.path.append("Path/to/EmulationUtilities")
 from _data_utils import DataModule
 from _nn_config import DataConfig, ModelConfig, TrainingConfig
 import _models

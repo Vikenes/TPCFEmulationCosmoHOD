@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 import sys 
-sys.path.append("../emul_utils")
+sys.path.append("Path/to/EmulationUtilities")
 from _plot import set_matplotlib_settings, get_CustomCycler
 set_matplotlib_settings()
 custom_cycler = get_CustomCycler()

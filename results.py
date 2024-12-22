@@ -7,7 +7,7 @@ import os
 from typing import List, Optional, Union
 from collections.abc import Iterable
 import sys 
-sys.path.append("../emul_utils")
+sys.path.append("Path/to/EmulationUtilities")
 from _predict import Predictor
 
 import matplotlib.pyplot as plt
